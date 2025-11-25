@@ -19,9 +19,12 @@ def test_ai():
         return jsonify({"error": "GEMINI_API_KEY not found"}), 500
 
     try:
+        data = request.get_json()
+        topic = data.get('topic', 'SaaS Marketing') if data else 'SaaS Marketing'
+
         # Using the requested model which is confirmed to be available for this key
         model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content("Write a short 1-sentence SEO strategy for 'SaaS Marketing'.")
+        response = model.generate_content(f"Write a short 1-sentence SEO strategy for '{topic}'.")
         return jsonify({"strategy": response.text.strip()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
