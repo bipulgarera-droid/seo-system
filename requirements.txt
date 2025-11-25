@@ -5,3 +5,4 @@ flask-cors
 importlib-metadata>=4.6
 zipp>=3.1.0
 requests
+python-dotenv
