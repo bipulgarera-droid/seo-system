@@ -130,7 +130,7 @@
                 btn.innerHTML = 'Starting...';
                 statusText.textContent = 'Registering job with Supabase...';
 
-                const startRes = await fetch('http://localhost:3000/api/start-audit', {
+                const startRes = await fetch('/api/start-audit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
@@ -145,7 +145,7 @@
                 statusText.textContent = 'Analyzing (this takes ~10s)...';
 
                 // Step 3: Process Job
-                const processRes = await fetch('http://localhost:3000/api/process-job', {
+                const processRes = await fetch('/api/process-job', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({}) // In a real queue system, the worker would pick this up independently. Here we trigger it manually.
