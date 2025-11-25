@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI SEO Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            background-color: #0f172a;
+            /* Slate 900 */
+            color: #e2e8f0;
+            /* Slate 200 */
+        }
+
+        .prose {
+            max-width: none;
+        }
+
+        .prose h1,
+        .prose h2,
+        .prose h3,
+        .prose h4 {
+            color: #f8fafc;
+            font-weight: 700;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+
+        .prose p {
+            margin-bottom: 1em;
+            line-height: 1.7;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5em;
+            margin-bottom: 1em;
+        }
+
+        .prose strong {
+            color: #38bdf8;
+            /* Sky 400 */
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-3xl bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 p-8">
+
+        <div class="text-center mb-8">
+            <div class="inline-block p-3 rounded-full bg-indigo-500/10 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-white tracking-tight">AI SEO Agent</h1>
+            <p class="text-slate-400 mt-2">Enter a URL to generate a comprehensive SEO strategy.</p>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label for="urlInput" class="block text-sm font-medium text-slate-300 mb-1">Target Website</label>
+                <input type="url" id="urlInput" placeholder="https://example.com"
+                    class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    required>
+            </div>
+
+            <button id="generateBtn" onclick="startAudit()"
+                class="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                <span>Generate Audit</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+            </button>
+        </div>
+
+        <div id="statusContainer"
+            class="hidden mt-6 p-4 bg-slate-900/50 rounded-xl border border-slate-700/50 flex items-center gap-3">
+            <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-400"></div>
+            <span id="statusText" class="text-slate-300 text-sm">Initializing...</span>
+        </div>
+
+        <div id="resultsContainer" class="hidden mt-8 pt-8 border-t border-slate-700">
+            <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Audit Results
+            </h2>
+            <div id="markdownOutput" class="prose prose-invert text-slate-300">
+                <!-- Results will be injected here -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        async function startAudit() {
+            const urlInput = document.getElementById('urlInput');
+            const btn = document.getElementById('generateBtn');
+            const statusContainer = document.getElementById('statusContainer');
+            const statusText = document.getElementById('statusText');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const markdownOutput = document.getElementById('markdownOutput');
+
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('Please enter a valid URL');
+                return;
+            }
+
+            // Reset UI
+            resultsContainer.classList.add('hidden');
+            statusContainer.classList.remove('hidden');
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            try {
+                // Step 1: Start Audit
+                btn.innerHTML = 'Starting...';
+                statusText.textContent = 'Registering job with Supabase...';
+
+                const startRes = await fetch('http://localhost:3000/api/start-audit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+
+                if (!startRes.ok) throw new Error('Failed to start audit');
+                const startData = await startRes.json();
+                const jobId = startData.id;
+
+                // Step 2: Update Status
+                btn.innerHTML = 'Analyzing...';
+                statusText.textContent = 'Analyzing (this takes ~10s)...';
+
+                // Step 3: Process Job
+                const processRes = await fetch('http://localhost:3000/api/process-job', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}) // In a real queue system, the worker would pick this up independently. Here we trigger it manually.
+                });
+
+                if (!processRes.ok) throw new Error('Analysis failed');
+                const processData = await processRes.json();
+
+                // Step 4: Display Results
+                statusContainer.classList.add('hidden');
+                resultsContainer.classList.remove('hidden');
+                markdownOutput.innerHTML = marked.parse(processData.result);
+
+                btn.innerHTML = '<span>Generate Audit</span><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>';
+
+            } catch (error) {
+                console.error(error);
+                if (error.message.includes('Failed to fetch')) {
+                    alert('Backend not found! Make sure the black terminal window is running and says Ready on port 3000');
+                }
+                statusText.textContent = 'Error: ' + error.message;
+                statusText.classList.add('text-red-400');
+                btn.innerHTML = 'Try Again';
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+    </script>
+</body>
+
+</html>
