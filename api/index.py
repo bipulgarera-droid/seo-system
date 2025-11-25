@@ -19,14 +19,9 @@ def test_ai():
         return jsonify({"error": "GEMINI_API_KEY not found"}), 500
 
     try:
-        # Trying gemini-1.5-flash-001 as the specific version, or falling back to gemini-pro
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash-001')
-            response = model.generate_content("Write a short 1-sentence SEO strategy for 'SaaS Marketing'.")
-        except Exception:
-            model = genai.GenerativeModel('gemini-pro')
-            response = model.generate_content("Write a short 1-sentence SEO strategy for 'SaaS Marketing'.")
-            
+        # Using the requested model which is confirmed to be available for this key
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content("Write a short 1-sentence SEO strategy for 'SaaS Marketing'.")
         return jsonify({"strategy": response.text.strip()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
