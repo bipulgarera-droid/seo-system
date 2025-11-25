@@ -104,6 +104,34 @@
 
     </div>
 
+    <!-- Article Modal -->
+    <div id="articleModal"
+        class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div
+            class="bg-slate-900 rounded-2xl border border-slate-700 w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-800/50 rounded-t-2xl">
+                <h3 class="text-xl font-bold text-white">Generated Article</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-8 overflow-y-auto prose prose-invert max-w-none" id="articleContent">
+                <!-- Article goes here -->
+            </div>
+            <div class="p-6 border-t border-slate-700 bg-slate-800/50 rounded-b-2xl flex justify-end gap-3">
+                <button onclick="copyArticle()"
+                    class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">Copy
+                    Markdown</button>
+                <button onclick="closeModal()"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         async function startAudit() {
             const urlInput = document.getElementById('urlInput');
@@ -162,6 +190,7 @@
                 statusContainer.classList.add('hidden');
                 resultsContainer.classList.remove('hidden');
                 markdownOutput.innerHTML = marked.parse(processData.result);
+                addWriteButtons();
 
                 btn.innerHTML = '<span>Generate Audit</span><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>';
 
@@ -178,7 +207,97 @@
                 btn.classList.remove('opacity-75', 'cursor-not-allowed');
             }
         }
+
+        function addWriteButtons() {
+            const container = document.getElementById('markdownOutput');
+            const headers = container.querySelectorAll('h3');
+
+            headers.forEach(header => {
+                // Try to extract keywords from the following list if possible
+                let keywords = [];
+                let nextElem = header.nextElementSibling;
+                // Look ahead for a UL containing keywords
+                while (nextElem && nextElem.tagName !== 'H3') {
+                    if (nextElem.tagName === 'UL') {
+                        const items = nextElem.querySelectorAll('li');
+                        items.forEach(li => {
+                            if (li.textContent.includes('Keywords')) {
+                                // Extract text inside quotes or after colon
+                                const text = li.textContent.split(':')[1] || '';
+                                const matches = text.match(/"([^"]+)"/g);
+                                if (matches) {
+                                    keywords = matches.map(m => m.replace(/"/g, ''));
+                                } else {
+                                    keywords = text.split(',').map(k => k.trim());
+                                }
+                            }
+                        });
+                    }
+                    nextElem = nextElem.nextElementSibling;
+                }
+
+                const btn = document.createElement('button');
+                btn.className = 'ml-4 px-3 py-1 text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full hover:bg-indigo-500/30 transition-all inline-flex items-center gap-1 opacity-80 hover:opacity-100';
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg> Write This`;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    writeArticle(header.innerText, keywords, btn);
+                };
+
+                header.classList.add('flex', 'items-center', 'flex-wrap');
+                header.appendChild(btn);
+            });
+        }
+
+        async function writeArticle(topicText, keywords, btn) {
+            const cleanTopic = topicText.replace(/^\d+\.\s*Topic:\s*|"/g, '').replace('Write This', '').trim();
+            const originalText = btn.innerHTML;
+
+            btn.innerHTML = `<svg class="animate-spin h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Writing...`;
+            btn.disabled = true;
+
+            const isLocal = window.location.port === '8000';
+            const API_BASE = isLocal ? 'http://localhost:3000' : '';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/write-article`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic: cleanTopic, keywords: keywords })
+                });
+
+                if (!res.ok) throw new Error('Failed to generate article');
+                const data = await res.json();
+
+                // Show Modal
+                const modal = document.getElementById('articleModal');
+                const content = document.getElementById('articleContent');
+                content.innerHTML = marked.parse(data.content);
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+
+            } catch (error) {
+                alert('Error generating article: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('articleModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function copyArticle() {
+            const content = document.getElementById('articleContent').innerText;
+            navigator.clipboard.writeText(content).then(() => {
+                alert('Article copied to clipboard!');
+            });
+        }
     </script>
 </body>
 
 </html>
+```

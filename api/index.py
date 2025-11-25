@@ -175,5 +175,31 @@ def process_job():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/write-article', methods=['POST'])
+def write_article():
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "GEMINI_API_KEY not found"}), 500
+
+    try:
+        data = request.get_json()
+        topic = data.get('topic')
+        keywords = data.get('keywords', [])
+
+        if not topic:
+            return jsonify({"error": "Topic is required"}), 400
+
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        system_instruction = "You are an expert SEO content writer. Write a comprehensive, engaging 1,500-word blog post about the given topic. Use H2 and H3 headers. Format in Markdown. Include a catchy title."
+        
+        keywords_str = ', '.join(keywords) if keywords else 'relevant SEO keywords'
+        full_prompt = f"{system_instruction}\n\nTopic: {topic}\nTarget Keywords: {keywords_str}"
+        
+        response = model.generate_content(full_prompt)
+        return jsonify({"content": response.text.strip()})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(port=3000)
