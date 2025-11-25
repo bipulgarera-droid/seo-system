@@ -70,6 +70,65 @@ def start_audit():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+import requests
+from urllib.parse import urlparse
+
+# ... (existing imports)
+
+# Configure DataForSEO
+DATAFORSEO_LOGIN = os.environ.get("DATAFORSEO_LOGIN")
+DATAFORSEO_PASSWORD = os.environ.get("DATAFORSEO_PASSWORD")
+
+def get_ranking_keywords(target_url):
+    if not DATAFORSEO_LOGIN or not DATAFORSEO_PASSWORD:
+        print("DataForSEO credentials missing.")
+        return []
+
+    try:
+        # Clean URL to get domain (DataForSEO prefers domain without protocol)
+        parsed = urlparse(target_url)
+        domain = parsed.netloc if parsed.netloc else parsed.path
+        if domain.startswith("www."):
+            domain = domain[4:]
+
+        url = "https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live"
+        payload = [
+            {
+                "target": domain,
+                "location_code": 2840, # US
+                "language_code": "en",
+                "filters": [
+                    ["rank_absolute", ">=", 1],
+                    "and",
+                    ["rank_absolute", "<=", 10]
+                ],
+                "order_by": ["keyword_info.search_volume,desc"],
+                "limit": 5
+            }
+        ]
+        headers = {
+            'content-type': 'application/json'
+        }
+
+        response = requests.post(url, json=payload, auth=(DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD), headers=headers)
+        print(f"DEBUG: Status Code: {response.status_code}")
+        print(f"DEBUG: Raw Response: {response.text}")
+        
+        response.raise_for_status()
+        data = response.json()
+
+        keywords = []
+        if data['tasks'] and data['tasks'][0]['result']:
+            for item in data['tasks'][0]['result'][0]['items']:
+                keywords.append(f"{item['keyword_data']['keyword']} (Vol: {item['keyword_data']['keyword_info']['search_volume']})")
+        
+        return keywords
+
+    except Exception as e:
+        print(f"DEBUG: ERROR OCCURRED: {str(e)}")
+        print(f"DataForSEO Error: {e}")
+        return []
+
 @app.route('/api/process-job', methods=['POST'])
 def process_job():
     if not supabase:
@@ -84,8 +143,6 @@ def process_job():
         
         job = response.data[0]
         job_id = job['id']
-        
-        # Handle URL: if key is missing OR value is None, use default
         target_url = job.get('url')
         if not target_url:
             target_url = 'example.com'
@@ -94,10 +151,16 @@ def process_job():
         supabase.table('audit_results').update({"status": "PROCESSING"}).eq('id', job_id).execute()
         
         # Step C: Work (Generate SEO audit)
-        # Using gemini-2.5-flash as requested and verified
+        
+        # 1. Get Keywords (Graceful degradation)
+        keywords = get_ranking_keywords(target_url)
+        keywords_str = ", ".join(keywords) if keywords else "No specific ranking keywords found."
+
+        # 2. Generate Audit with Gemini
         model = genai.GenerativeModel('gemini-2.5-flash')
-        # Use dynamic URL in prompt
-        prompt = f"Analyze the SEO strategy for {target_url}."
+        
+        prompt = f"Analyze SEO for {target_url}. It currently ranks for these top keywords: {keywords_str}. Based on this, suggest 3 new content topics."
+        
         ai_response = model.generate_content(prompt)
         audit_result = ai_response.text.strip()
         
