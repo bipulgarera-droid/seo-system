@@ -68,5 +68,46 @@ def start_audit():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/process-job', methods=['POST'])
+def process_job():
+    if not supabase:
+        return jsonify({"error": "Supabase not configured"}), 500
+
+    try:
+        # Step A: Fetch one pending job
+        response = supabase.table('audit_results').select("*").eq('status', 'PENDING').limit(1).execute()
+        
+        if not response.data:
+            return jsonify({"message": "No pending jobs"})
+        
+        job = response.data[0]
+        job_id = job['id']
+        
+        # Step B: Lock (Update status to PROCESSING)
+        supabase.table('audit_results').update({"status": "PROCESSING"}).eq('id', job_id).execute()
+        
+        # Step C: Work (Generate SEO audit)
+        # Using gemini-2.5-flash as requested and verified
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        # Mock website 'example.com' as requested
+        prompt = "Generate a 3-sentence SEO audit for the website 'example.com'."
+        ai_response = model.generate_content(prompt)
+        audit_result = ai_response.text.strip()
+        
+        # Step D: Save (Update result and status to COMPLETED)
+        supabase.table('audit_results').update({
+            "status": "COMPLETED",
+            "result": audit_result
+        }).eq('id', job_id).execute()
+        
+        return jsonify({
+            "id": job_id,
+            "status": "COMPLETED",
+            "result": audit_result
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run()
