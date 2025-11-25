@@ -98,11 +98,11 @@ def get_ranking_keywords(target_url):
                 "location_code": 2840, # US
                 "language_code": "en",
                 "filters": [
-                    ["rank_absolute", ">=", 1],
+                    ["ranked_serp_element.serp_item.rank_absolute", ">=", 1],
                     "and",
-                    ["rank_absolute", "<=", 10]
+                    ["ranked_serp_element.serp_item.rank_absolute", "<=", 10]
                 ],
-                "order_by": ["keyword_info.search_volume,desc"],
+                "order_by": ["keyword_data.keyword_info.search_volume,desc"],
                 "limit": 5
             }
         ]
@@ -111,9 +111,6 @@ def get_ranking_keywords(target_url):
         }
 
         response = requests.post(url, json=payload, auth=(DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD), headers=headers)
-        print(f"DEBUG: Status Code: {response.status_code}")
-        print(f"DEBUG: Raw Response: {response.text}")
-        
         response.raise_for_status()
         data = response.json()
 
@@ -125,7 +122,6 @@ def get_ranking_keywords(target_url):
         return keywords
 
     except Exception as e:
-        print(f"DEBUG: ERROR OCCURRED: {str(e)}")
         print(f"DataForSEO Error: {e}")
         return []
 
@@ -180,4 +176,4 @@ def process_job():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run()
+    app.run(port=3000)
