@@ -40,24 +40,16 @@ def start_audit():
         return jsonify({"error": "Supabase not configured"}), 500
 
     try:
-        # Create a new row with status 'PENDING'
-        data, count = supabase.table('audit_results').insert({"status": "PENDING"}).execute()
-        
-        # Return the ID of the newly created row
-        if data and len(data[1]) > 0:
-             # supabase-py v2 returns data as a tuple (data, count), where data[1] is the list of rows
-             # Wait, checking supabase-py v2 response format. 
-             # It usually returns a response object or a tuple depending on version. 
-             # Let's assume standard v2: response.data
-             # Actually, let's be safe and inspect the return. 
-             # The execute() method returns a `APIResponse` object which has `data` attribute.
-             # Let's correct the code to use the object attribute access if possible, or standard dict access.
-             # Standard usage: response = supabase.table(...).insert(...).execute()
-             # response.data is the list of inserted rows.
-             pass
-        
-        # Let's rewrite this block to be cleaner and safer
-        response = supabase.table('audit_results').insert({"status": "PENDING"}).execute()
+        # Get URL from request
+        data = request.get_json()
+        url = data.get('url') if data else None
+
+        # Create a new row with status 'PENDING' and optional URL
+        insert_data = {"status": "PENDING"}
+        if url:
+            insert_data["url"] = url
+
+        response = supabase.table('audit_results').insert(insert_data).execute()
         
         if response.data and len(response.data) > 0:
             new_id = response.data[0]['id']
@@ -82,6 +74,7 @@ def process_job():
         
         job = response.data[0]
         job_id = job['id']
+        url = job.get('url', 'example.com') # Default to example.com if no URL provided
         
         # Step B: Lock (Update status to PROCESSING)
         supabase.table('audit_results').update({"status": "PROCESSING"}).eq('id', job_id).execute()
@@ -89,8 +82,8 @@ def process_job():
         # Step C: Work (Generate SEO audit)
         # Using gemini-2.5-flash as requested and verified
         model = genai.GenerativeModel('gemini-2.5-flash')
-        # Mock website 'example.com' as requested
-        prompt = "Generate a 3-sentence SEO audit for the website 'example.com'."
+        # Use dynamic URL in prompt
+        prompt = f"Analyze the SEO strategy for {url}."
         ai_response = model.generate_content(prompt)
         audit_result = ai_response.text.strip()
         
