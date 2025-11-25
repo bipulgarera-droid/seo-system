@@ -8,7 +8,7 @@ from flask_cors import CORS
 load_dotenv('.env.local')
 load_dotenv()
 
-app = Flask(__name__, static_folder='../public', static_url_path='/')
+app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Configure Gemini
@@ -24,9 +24,9 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
-@app.route('/')
-def home():
-    return app.send_static_file('index.html')
+# @app.route('/')
+# def home():
+#     return app.send_static_file('index.html')
 
 @app.route('/api/test-ai', methods=['POST'])
 def test_ai():
