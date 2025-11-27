@@ -1395,7 +1395,8 @@
             if (!p) return;
 
             // Filter pages based on currentClassificationFilter
-            let pages = allPages.filter(pg => pg.project_id === currentProjectId);
+            // Use projectPages which is populated by loadProject
+            let pages = projectPages;
 
             if (currentClassificationFilter !== 'all') {
                 pages = pages.filter(pg => pg.funnel_stage === currentClassificationFilter);
@@ -1451,7 +1452,7 @@
 
                 if (res.ok) {
                     // Update local state
-                    const page = allPages.find(p => p.id === pageId);
+                    const page = projectPages.find(p => p.id === pageId);
                     if (page) {
                         page.funnel_stage = newType;
                         // Update counts
