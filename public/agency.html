@@ -697,6 +697,14 @@
                 const data = await res.json();
                 projectPages = data.pages || [];
 
+                // DEBUG: Remove later
+                console.log(`Loaded ${projectPages.length} pages for project ${id}`);
+                if (projectPages.length === 0) {
+                    alert(`Warning: 0 pages loaded for project ${id}. Check database.`);
+                } else {
+                    // alert(`Loaded ${projectPages.length} pages.`);
+                }
+
                 // If we are on projects tab, just update table. If on others, render view.
                 if (document.getElementById('tab-projects').classList.contains('active')) {
                     renderProjectsTable();
