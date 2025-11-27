@@ -1391,8 +1391,7 @@
             const tbody = document.getElementById('classificationTable');
             tbody.innerHTML = '';
 
-            const p = allProjects.find(pr => pr.id === currentProjectId);
-            if (!p) return;
+            if (!currentProject) return;
 
             // Filter pages based on currentClassificationFilter
             // Use projectPages which is populated by loadProject
@@ -1428,7 +1427,7 @@
                         </td>
                         <td class="px-6 py-4 text-gray-400">${pg.title || '-'}</td>
                         <td class="px-6 py-4">
-                            <select onchange="handleClassificationChange('${pg.id}', this.value)" 
+                            <select onchange="handleClassificationChange('${pg.id}', this.value)"
                                 class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-40 focus:ring-2 focus:ring-blue-500">
                                 ${optionsHtml}
                             </select>
@@ -1456,8 +1455,7 @@
                     if (page) {
                         page.funnel_stage = newType;
                         // Update counts
-                        const project = allProjects.find(p => p.id === currentProjectId);
-                        if (project) {
+                        if (currentProject) {
                             // Simple increment/decrement logic could be complex due to previous state
                             // Easier to just reload project data or re-count locally if needed
                             // For now, let's just re-render to reflect filter changes
@@ -1474,7 +1472,7 @@
         }
 
         async function runAutoClassify() {
-            if (!currentProjectId) return;
+            if (!currentProject) return;
 
             document.getElementById('loadingOverlay').classList.remove('hidden');
             document.getElementById('loadingOverlay').classList.add('flex');
@@ -1483,14 +1481,14 @@
                 const res = await fetch(`${API_BASE}/auto-classify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: currentProjectId })
+                    body: JSON.stringify({ project_id: currentProject.id })
                 });
                 const data = await res.json();
 
                 alert(data.message);
 
                 // Reload data
-                await loadProject(currentProjectId);
+                await loadProject(currentProject.id);
                 renderClassification();
 
             } catch (e) {
