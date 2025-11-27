@@ -2206,7 +2206,7 @@ def classify_page():
     try:
         data = request.get_json()
         page_id = data.get('page_id')
-        stage = data.get('stage') # 'BoFu', 'MoFu', 'ToFu', 'Ignore'
+        stage = data.get('stage') or data.get('funnel_stage')
         
         if not page_id or not stage:
             return jsonify({"error": "page_id and stage are required"}), 400
