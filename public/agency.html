@@ -1247,7 +1247,7 @@
                 <th class="px-6 py-3 font-medium whitespace-nowrap text-center">Has Schema</th>
             `;
 
-            projectPages.forEach(p => {
+            const rows = projectPages.map(p => {
                 const data = p.tech_audit_data || {};
 
                 const isRedirect = data.is_redirect ? '<span class="text-yellow-400">Yes</span>' : '<span class="text-gray-600">-</span>';
@@ -1267,7 +1267,7 @@
                 const isBroken = data.is_broken ? '<span class="text-red-600 font-bold">Yes</span>' : '<span class="text-gray-600">-</span>';
                 const hasSchema = data.has_schema ? '<span class="text-green-400">Yes</span>' : '<span class="text-gray-600">-</span>';
 
-                tbody.innerHTML += `
+                return `
                     <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                         <td class="px-6 py-4 whitespace-nowrap" title="${p.url}">${p.url}</td>
                         <td class="px-6 py-4 whitespace-nowrap font-mono text-xs text-gray-400">${data.status_code || '-'}</td>
@@ -1288,136 +1288,136 @@
                         <td class="px-6 py-4 whitespace-nowrap text-center">${hasSchema}</td>
                     </tr>
                 `;
-            });
-        }
+            }).join('');
 
-        async function runPageSpeed(pageId) {
-            const btn = event.target;
-            const originalText = btn.innerText;
-            btn.innerText = 'Running...';
-            btn.disabled = true;
+            tbody.innerHTML = rows;
 
-            try {
-                const res = await fetch(`${API_BASE}/analyze-speed`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_id: pageId, strategy: 'mobile' })
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
+            async function runPageSpeed(pageId) {
+                const btn = event.target;
+                const originalText = btn.innerText;
+                btn.innerText = 'Running...';
+                btn.disabled = true;
 
-                await loadProject(currentProject.id); // Refresh
-            } catch (e) {
-                alert(`Error: ${e.message}`);
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }
-        }
+                try {
+                    const res = await fetch(`${API_BASE}/analyze-speed`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page_id: pageId, strategy: 'mobile' })
+                    });
+                    const data = await res.json();
+                    if (data.error) throw new Error(data.error);
 
-        async function runBatchAudit() {
-            if (projectPages.length === 0) {
-                alert("No pages found for this project. Please ensure the project was set up correctly and URLs were discovered.");
-                return;
-            }
-            if (!confirm(`Analyze first 5 pending pages? (Demo Limit)`)) return;
-
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
-
-            // Demo: just run first 5
-            const pending = projectPages.slice(0, 5);
-
-            // Run in parallel
-            const promises = pending.map(p =>
-                fetch(`${API_BASE}/start-audit`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_id: p.id })
-                }).then(res => res.json())
-            );
-
-            try {
-                await Promise.all(promises);
-                alert("Batch audit completed!");
-            } catch (e) {
-                console.error(e);
-                alert("Some audits failed. Check console.");
-            }
-
-            await loadProject(currentProject.id);
-        }
-
-        // --- Helper: Markdown Renderer ---
-        function renderMarkdown(text) {
-            if (!text) return '';
-            let html = text
-                // Bold: **text** -> <strong>text</strong>
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                // Headers: ## Text -> <h3>Text</h3>
-                .replace(/^### (.*$)/gm, '<h5 class="font-bold text-gray-200 mt-3 mb-1">$1</h5>')
-                .replace(/^## (.*$)/gm, '<h4 class="font-bold text-white mt-4 mb-2">$1</h4>')
-                // Lists: * text or - text -> <li>text</li>
-                .replace(/^\s*[\*\-]\s+(.*$)/gm, '<li class="ml-4">$1</li>')
-                // Line breaks to <br> if not in a list
-                .replace(/\n/g, '<br>');
-
-            if (html.includes('<li')) {
-                html = html.replace(/((?:<li.*?>.*?<\/li>\s*)+)/g, '<ul class="list-disc list-inside space-y-1 text-gray-300">$1</ul>');
-            }
-            return html;
-        }
-
-        // --- View 3: Classification ---
-        let currentClassificationFilter = 'all';
-
-        function filterClassification(filter) {
-            currentClassificationFilter = filter;
-            renderClassification();
-
-            // Update active state in sidebar
-            const buttons = document.querySelectorAll('#sidebar-content button');
-            buttons.forEach(btn => {
-                if (btn.textContent.includes(filter === 'all' ? 'All' : filter)) {
-                    btn.classList.add('active', 'bg-gray-800', 'text-white');
-                    btn.classList.remove('text-gray-300');
-                } else {
-                    btn.classList.remove('active', 'bg-gray-800', 'text-white');
-                    btn.classList.add('text-gray-300');
+                    await loadProject(currentProject.id); // Refresh
+                } catch (e) {
+                    alert(`Error: ${e.message}`);
+                    btn.innerText = originalText;
+                    btn.disabled = false;
                 }
-            });
-        }
-
-        function renderClassification() {
-            const tbody = document.getElementById('classificationTable');
-            tbody.innerHTML = '';
-
-            if (!currentProject) return;
-
-            // Filter pages based on currentClassificationFilter
-            // Use projectPages which is populated by loadProject
-            let pages = projectPages;
-
-            if (currentClassificationFilter !== 'all') {
-                pages = pages.filter(pg => pg.funnel_stage === currentClassificationFilter);
             }
 
-            if (pages.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-8 text-gray-500">No ${currentClassificationFilter !== 'all' ? currentClassificationFilter : ''} pages found.</td></tr>`;
-                return;
+            async function runBatchAudit() {
+                if (projectPages.length === 0) {
+                    alert("No pages found for this project. Please ensure the project was set up correctly and URLs were discovered.");
+                    return;
+                }
+                if (!confirm(`Analyze first 5 pending pages? (Demo Limit)`)) return;
+
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
+
+                // Demo: just run first 5
+                const pending = projectPages.slice(0, 5);
+
+                // Run in parallel
+                const promises = pending.map(p =>
+                    fetch(`${API_BASE}/start-audit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page_id: p.id })
+                    }).then(res => res.json())
+                );
+
+                try {
+                    await Promise.all(promises);
+                    alert("Batch audit completed!");
+                } catch (e) {
+                    console.error(e);
+                    alert("Some audits failed. Check console.");
+                }
+
+                await loadProject(currentProject.id);
             }
 
-            pages.forEach(pg => {
-                const stage = pg.funnel_stage || 'Unclassified';
+            // --- Helper: Markdown Renderer ---
+            function renderMarkdown(text) {
+                if (!text) return '';
+                let html = text
+                    // Bold: **text** -> <strong>text</strong>
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    // Headers: ## Text -> <h3>Text</h3>
+                    .replace(/^### (.*$)/gm, '<h5 class="font-bold text-gray-200 mt-3 mb-1">$1</h5>')
+                    .replace(/^## (.*$)/gm, '<h4 class="font-bold text-white mt-4 mb-2">$1</h4>')
+                    // Lists: * text or - text -> <li>text</li>
+                    .replace(/^\s*[\*\-]\s+(.*$)/gm, '<li class="ml-4">$1</li>')
+                    // Line breaks to <br> if not in a list
+                    .replace(/\n/g, '<br>');
 
-                // Simplified Dropdown Options
-                const options = ['Product', 'Category', 'Other', 'Unclassified'];
+                if (html.includes('<li')) {
+                    html = html.replace(/((?:<li.*?>.*?<\/li>\s*)+)/g, '<ul class="list-disc list-inside space-y-1 text-gray-300">$1</ul>');
+                }
+                return html;
+            }
 
-                let optionsHtml = '';
-                options.forEach(opt => {
-                    optionsHtml += `<option value="${opt}" ${stage === opt ? 'selected' : ''}>${opt}</option>`;
+            // --- View 3: Classification ---
+            let currentClassificationFilter = 'all';
+
+            function filterClassification(filter) {
+                currentClassificationFilter = filter;
+                renderClassification();
+
+                // Update active state in sidebar
+                const buttons = document.querySelectorAll('#sidebar-content button');
+                buttons.forEach(btn => {
+                    if (btn.textContent.includes(filter === 'all' ? 'All' : filter)) {
+                        btn.classList.add('active', 'bg-gray-800', 'text-white');
+                        btn.classList.remove('text-gray-300');
+                    } else {
+                        btn.classList.remove('active', 'bg-gray-800', 'text-white');
+                        btn.classList.add('text-gray-300');
+                    }
                 });
+            }
 
-                tbody.innerHTML += `
+            function renderClassification() {
+                const tbody = document.getElementById('classificationTable');
+                tbody.innerHTML = '';
+
+                if (!currentProject) return;
+
+                // Filter pages based on currentClassificationFilter
+                // Use projectPages which is populated by loadProject
+                let pages = projectPages;
+
+                if (currentClassificationFilter !== 'all') {
+                    pages = pages.filter(pg => pg.funnel_stage === currentClassificationFilter);
+                }
+
+                if (pages.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-center py-8 text-gray-500">No ${currentClassificationFilter !== 'all' ? currentClassificationFilter : ''} pages found.</td></tr>`;
+                    return;
+                }
+
+                const rows = pages.map(pg => {
+                    const stage = pg.funnel_stage || 'Unclassified';
+
+                    // Simplified Dropdown Options
+                    const options = ['Product', 'Category', 'Other', 'Unclassified'];
+
+                    let optionsHtml = options.map(opt =>
+                        `<option value="${opt}" ${stage === opt ? 'selected' : ''}>${opt}</option>`
+                    ).join('');
+
+                    return `
                     <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                         <td class="px-6 py-4 text-blue-400 break-all max-w-md">
                             <a href="${pg.url}" target="_blank" class="hover:underline flex items-center gap-2">
@@ -1427,104 +1427,106 @@
                         </td>
                         <td class="px-6 py-4 text-gray-400">${pg.title || '-'}</td>
                         <td class="px-6 py-4">
-                            <select onchange="handleClassificationChange('${pg.id}', this.value)"
+                            <select onchange="handleClassificationChange('${pg.id}', this.value)" 
                                 class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-40 focus:ring-2 focus:ring-blue-500">
                                 ${optionsHtml}
                             </select>
                         </td>
                     </tr>
                 `;
-            });
-            lucide.createIcons();
-        }
+                }).join('');
 
-        async function handleClassificationChange(pageId, newType) {
-            try {
-                const res = await fetch(`${API_BASE}/classify-page`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        page_id: pageId,
-                        funnel_stage: newType
-                    })
-                });
+                tbody.innerHTML = rows;
+                lucide.createIcons();
+            }
 
-                if (res.ok) {
-                    // Update local state
-                    const page = projectPages.find(p => p.id === pageId);
-                    if (page) {
-                        page.funnel_stage = newType;
-                        // Update counts
-                        if (currentProject) {
-                            // Simple increment/decrement logic could be complex due to previous state
-                            // Easier to just reload project data or re-count locally if needed
-                            // For now, let's just re-render to reflect filter changes
-                            renderClassification();
+            async function handleClassificationChange(pageId, newType) {
+                try {
+                    const res = await fetch(`${API_BASE}/classify-page`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            page_id: pageId,
+                            funnel_stage: newType
+                        })
+                    });
+
+                    if (res.ok) {
+                        // Update local state
+                        const page = projectPages.find(p => p.id === pageId);
+                        if (page) {
+                            page.funnel_stage = newType;
+                            // Update counts
+                            if (currentProject) {
+                                // Simple increment/decrement logic could be complex due to previous state
+                                // Easier to just reload project data or re-count locally if needed
+                                // For now, let's just re-render to reflect filter changes
+                                renderClassification();
+                            }
                         }
+                    } else {
+                        alert("Failed to update classification");
                     }
-                } else {
-                    alert("Failed to update classification");
+                } catch (e) {
+                    console.error(e);
+                    alert("Error updating classification");
                 }
-            } catch (e) {
-                console.error(e);
-                alert("Error updating classification");
-            }
-        }
-
-        async function runAutoClassify() {
-            if (!currentProject) return;
-
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
-
-            try {
-                const res = await fetch(`${API_BASE}/auto-classify`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: currentProject.id })
-                });
-                const data = await res.json();
-
-                alert(data.message);
-
-                // Reload data
-                await loadProject(currentProject.id);
-                renderClassification();
-
-            } catch (e) {
-                console.error(e);
-                alert("Auto-classification failed");
-            } finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                document.getElementById('loadingOverlay').classList.remove('flex');
-            }
-        }
-
-        // --- View 4: Product / Pillars ---
-        function renderProductPillars() {
-            const tbody = document.getElementById('productPillarsTable');
-            tbody.innerHTML = '';
-
-            // Only show pages classified as 'Product'
-            const products = projectPages.filter(p => p.page_type === 'Product');
-
-            // Helper for safe string escaping
-            function safeStr(str) {
-                if (!str) return '';
-                return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             }
 
-            if (products.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No Product pages found. Classify pages in "URL Classification" tab first.</td></tr>';
-                return;
+            async function runAutoClassify() {
+                if (!currentProject) return;
+
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
+
+                try {
+                    const res = await fetch(`${API_BASE}/auto-classify`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ project_id: currentProject.id })
+                    });
+                    const data = await res.json();
+
+                    alert(data.message);
+
+                    // Reload data
+                    await loadProject(currentProject.id);
+                    renderClassification();
+
+                } catch (e) {
+                    console.error(e);
+                    alert("Auto-classification failed");
+                } finally {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('loadingOverlay').classList.remove('flex');
+                }
             }
 
-            const rows = products.map(p => {
-                const data = p.tech_audit_data || {};
-                const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
-                const existingPreview = p.tech_audit_data?.meta_description ? p.tech_audit_data.meta_description.substring(0, 50) + '...' : '';
+            // --- View 4: Product / Pillars ---
+            function renderProductPillars() {
+                const tbody = document.getElementById('productPillarsTable');
+                tbody.innerHTML = '';
 
-                return `
+                // Only show pages classified as 'Product'
+                const products = projectPages.filter(p => p.page_type === 'Product');
+
+                // Helper for safe string escaping
+                function safeStr(str) {
+                    if (!str) return '';
+                    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                }
+
+                if (products.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No Product pages found. Classify pages in "URL Classification" tab first.</td></tr>';
+                    return;
+                }
+
+                const rows = products.map(p => {
+                    const data = p.tech_audit_data || {};
+                    const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
+                    const existingPreview = p.tech_audit_data?.meta_description ? p.tech_audit_data.meta_description.substring(0, 50) + '...' : '';
+
+                    return `
                     <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                         <td class="px-6 py-4 truncate max-w-xs text-sm font-medium text-white" title="${data.title}">${data.title || 'Untitled Product'}</td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-blue-400" title="${p.url}"><a href="${p.url}" target="_blank" class="hover:underline">${p.url}</a></td>
@@ -1548,31 +1550,31 @@
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400" title="${data.title}">${data.title || '-'}</td>
                     </tr>
                 `;
-            }).join('');
+                }).join('');
 
-            tbody.innerHTML = rows;
-        }
-
-        function showResearchData(pageId) {
-            const p = projectPages.find(page => page.id === pageId);
-            if (!p || !p.research_data) {
-                alert('No research data available for this topic.');
-                return;
+                tbody.innerHTML = rows;
             }
 
-            const researchData = p.research_data;
+            function showResearchData(pageId) {
+                const p = projectPages.find(page => page.id === pageId);
+                if (!p || !p.research_data) {
+                    alert('No research data available for this topic.');
+                    return;
+                }
 
-            // Helper to format mixed content (string, array, object)
-            function formatResearchValue(val) {
-                if (!val) return 'N/A';
-                if (typeof val === 'string') return renderMarkdown(val);
-                if (Array.isArray(val)) {
-                    return `<ul class="list-disc list-inside space-y-1 ml-2">
+                const researchData = p.research_data;
+
+                // Helper to format mixed content (string, array, object)
+                function formatResearchValue(val) {
+                    if (!val) return 'N/A';
+                    if (typeof val === 'string') return renderMarkdown(val);
+                    if (Array.isArray(val)) {
+                        return `<ul class="list-disc list-inside space-y-1 ml-2">
                         ${val.map(item => `<li>${formatResearchValue(item)}</li>`).join('')}
                     </ul>`;
-                }
-                if (typeof val === 'object') {
-                    return `<div class="space-y-2 ml-2 border-l-2 border-gray-700 pl-3">
+                    }
+                    if (typeof val === 'object') {
+                        return `<div class="space-y-2 ml-2 border-l-2 border-gray-700 pl-3">
                         ${Object.entries(val).map(([k, v]) => `
                             <div>
                                 <span class="font-semibold text-gray-400 capitalize">${k.replace(/_/g, ' ')}:</span> 
@@ -1580,12 +1582,12 @@
                             </div>
                         `).join('')}
                     </div>`;
+                    }
+                    return val;
                 }
-                return val;
-            }
 
-            // Format research data as readable HTML
-            const formattedResearch = `
+                // Format research data as readable HTML
+                const formattedResearch = `
                 <div class="space-y-6">
                     <div>
                         <h4 class="font-bold text-lg mb-2">Research Brief</h4>
@@ -1649,110 +1651,110 @@
                 </div >
             `;
 
-            document.getElementById('contentModalBody').innerHTML = formattedResearch;
-            document.querySelector('#contentModal h3').innerText = 'Research Data';
-            document.getElementById('contentModal').classList.remove('hidden');
-            document.getElementById('contentModal').classList.add('flex');
-        }
-
-        function showTextModal(title, text) {
-            document.getElementById('contentModalBody').innerHTML = `<div class="whitespace-pre-wrap text-gray-300 text-sm leading-relaxed">${renderMarkdown(text)}</div>`;
-            document.querySelector('#contentModal h3').innerText = title;
-            document.getElementById('contentModal').classList.remove('hidden');
-            document.getElementById('contentModal').classList.add('flex');
-        }
-
-        function showModalContent(pageId, type) {
-            const p = projectPages.find(page => page.id === pageId);
-            if (!p) return;
-
-            let content = '';
-            let title = '';
-
-            if (type === 'new') {
-                content = p.content || 'No content generated yet.';
-                title = 'Generated Content';
-            } else {
-                // Display the scraped body content
-                content = p.tech_audit_data?.body_content || p.tech_audit_data?.meta_description || 'No existing content found. Click "Scrape Content" first.';
-                title = 'Existing Content';
+                document.getElementById('contentModalBody').innerHTML = formattedResearch;
+                document.querySelector('#contentModal h3').innerText = 'Research Data';
+                document.getElementById('contentModal').classList.remove('hidden');
+                document.getElementById('contentModal').classList.add('flex');
             }
 
-            // Format content for better readability
-            let formattedContent = content;
-
-            // For existing content, add better structure
-            if (type === 'existing') {
-                formattedContent = content
-                    // Add double line breaks before section headers (ALL CAPS lines)
-                    .replace(/\n([A-Z][A-Z\s]+[A-Z])\n/g, '\n\n## $1\n\n')
-                    // Convert bullet-like patterns to actual bullets
-                    .replace(/\n-\s+/g, '\n• ')
-                    // Clean up excessive whitespace
-                    .replace(/[ \t]+/g, ' ')
-                    .replace(/\n{3,}/g, '\n\n')
-                    .trim();
+            function showTextModal(title, text) {
+                document.getElementById('contentModalBody').innerHTML = `<div class="whitespace-pre-wrap text-gray-300 text-sm leading-relaxed">${renderMarkdown(text)}</div>`;
+                document.querySelector('#contentModal h3').innerText = title;
+                document.getElementById('contentModal').classList.remove('hidden');
+                document.getElementById('contentModal').classList.add('flex');
             }
 
-            // Render with proper line breaks and markdown
-            const contentDiv = document.getElementById('contentModalBody');
-            contentDiv.innerHTML = '';
+            function showModalContent(pageId, type) {
+                const p = projectPages.find(page => page.id === pageId);
+                if (!p) return;
 
-            // Create a div for markdown content
-            const div = document.createElement('div');
-            div.className = 'whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-200 p-4';
-            div.style.maxWidth = '100%';
-            div.style.overflowWrap = 'break-word';
-            div.innerHTML = renderMarkdown(formattedContent); // Use renderMarkdown here
+                let content = '';
+                let title = '';
 
-            contentDiv.appendChild(div);
+                if (type === 'new') {
+                    content = p.content || 'No content generated yet.';
+                    title = 'Generated Content';
+                } else {
+                    // Display the scraped body content
+                    content = p.tech_audit_data?.body_content || p.tech_audit_data?.meta_description || 'No existing content found. Click "Scrape Content" first.';
+                    title = 'Existing Content';
+                }
 
-            document.querySelector('#contentModal h3').innerText = title;
-            document.getElementById('contentModal').classList.remove('hidden');
-            document.getElementById('contentModal').classList.add('flex');
-        }
+                // Format content for better readability
+                let formattedContent = content;
 
-        async function handleProductAction(pageId, action) {
-            if (action === 'Idle') return;
+                // For existing content, add better structure
+                if (type === 'existing') {
+                    formattedContent = content
+                        // Add double line breaks before section headers (ALL CAPS lines)
+                        .replace(/\n([A-Z][A-Z\s]+[A-Z])\n/g, '\n\n## $1\n\n')
+                        // Convert bullet-like patterns to actual bullets
+                        .replace(/\n-\s+/g, '\n• ')
+                        // Clean up excessive whitespace
+                        .replace(/[ \t]+/g, ' ')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim();
+                }
 
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
+                // Render with proper line breaks and markdown
+                const contentDiv = document.getElementById('contentModalBody');
+                contentDiv.innerHTML = '';
 
-            try {
-                const apiAction = action === 'Scrape Content' ? 'scrape_content' :
-                    action === 'Generate Content' ? 'generate_content' : 'generate_mofu';
+                // Create a div for markdown content
+                const div = document.createElement('div');
+                div.className = 'whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-200 p-4';
+                div.style.maxWidth = '100%';
+                div.style.overflowWrap = 'break-word';
+                div.innerHTML = renderMarkdown(formattedContent); // Use renderMarkdown here
 
-                await fetch(`${API_BASE}/batch-update-pages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_ids: [pageId], action: apiAction })
-                });
-                await loadProject(currentProject.id);
-            } catch (e) { alert(e); }
-            finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                document.getElementById('loadingOverlay').classList.remove('flex');
-            }
-        }
+                contentDiv.appendChild(div);
 
-        // --- View 4.5: Category Pages ---
-        function renderCategoryPages() {
-            const tbody = document.getElementById('categoryPagesTable');
-            tbody.innerHTML = '';
-
-            const categories = projectPages.filter(p => p.page_type === 'Category');
-
-            if (categories.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No Category pages found. Classify pages in "URL Classification" tab first.</td></tr>';
-                return;
+                document.querySelector('#contentModal h3').innerText = title;
+                document.getElementById('contentModal').classList.remove('hidden');
+                document.getElementById('contentModal').classList.add('flex');
             }
 
-            categories.forEach(p => {
-                const data = p.tech_audit_data || {};
-                const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
-                const existingPreview = p.tech_audit_data?.body_content ? p.tech_audit_data.body_content.substring(0, 50) + '...' : '';
+            async function handleProductAction(pageId, action) {
+                if (action === 'Idle') return;
 
-                tbody.innerHTML += `
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
+
+                try {
+                    const apiAction = action === 'Scrape Content' ? 'scrape_content' :
+                        action === 'Generate Content' ? 'generate_content' : 'generate_mofu';
+
+                    await fetch(`${API_BASE}/batch-update-pages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page_ids: [pageId], action: apiAction })
+                    });
+                    await loadProject(currentProject.id);
+                } catch (e) { alert(e); }
+                finally {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('loadingOverlay').classList.remove('flex');
+                }
+            }
+
+            // --- View 4.5: Category Pages ---
+            function renderCategoryPages() {
+                const tbody = document.getElementById('categoryPagesTable');
+                tbody.innerHTML = '';
+
+                const categories = projectPages.filter(p => p.page_type === 'Category');
+
+                if (categories.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No Category pages found. Classify pages in "URL Classification" tab first.</td></tr>';
+                    return;
+                }
+
+                categories.forEach(p => {
+                    const data = p.tech_audit_data || {};
+                    const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
+                    const existingPreview = p.tech_audit_data?.body_content ? p.tech_audit_data.body_content.substring(0, 50) + '...' : '';
+
+                    tbody.innerHTML += `
                     <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                         <td class="px-6 py-4 truncate max-w-xs text-sm font-medium text-white" title="${data.title}">${data.title || 'Untitled Category'}</td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-blue-400" title="${p.url}"><a href="${p.url}" target="_blank" class="hover:underline">${p.url}</a></td>
@@ -1773,58 +1775,58 @@
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400" title="${data.title}">${data.title || '-'}</td>
                     </tr>
                 `;
-            });
-        }
-
-        async function handleCategoryAction(pageId, action) {
-            if (action === 'Idle') return;
-
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
-
-            try {
-                const apiAction = action === 'Scrape Content' ? 'scrape_content' : 'generate_content';
-
-                await fetch(`${API_BASE}/batch-update-pages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_ids: [pageId], action: apiAction })
                 });
-                await loadProject(currentProject.id);
-            } catch (e) { alert(e); }
-            finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                document.getElementById('loadingOverlay').classList.remove('flex');
-            }
-        }
-
-        // --- View 5: MoFu ---
-        function renderMoFu() {
-            const tbody = document.getElementById('mofuTable');
-            tbody.innerHTML = '';
-
-            const topics = projectPages.filter(p => p.page_type === 'Topic' && p.funnel_stage === 'MoFu');
-
-            if (topics.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">No MoFu topics generated yet. Go to "Product / Pillars" and select "Generate MoFu".</td></tr>';
-                return;
             }
 
-            // Group by Source Page
-            const grouped = {};
-            topics.forEach(t => {
-                const sourceId = t.source_page_id || 'unknown';
-                if (!grouped[sourceId]) grouped[sourceId] = [];
-                grouped[sourceId].push(t);
-            });
+            async function handleCategoryAction(pageId, action) {
+                if (action === 'Idle') return;
 
-            let htmlContent = '';
-            for (const [sourceId, groupTopics] of Object.entries(grouped)) {
-                const sourcePage = projectPages.find(p => p.id === sourceId);
-                const sourceTitle = sourcePage ? (sourcePage.tech_audit_data?.title || sourcePage.url) : 'Unknown Source';
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
 
-                // Header Row for Product
-                htmlContent += `
+                try {
+                    const apiAction = action === 'Scrape Content' ? 'scrape_content' : 'generate_content';
+
+                    await fetch(`${API_BASE}/batch-update-pages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page_ids: [pageId], action: apiAction })
+                    });
+                    await loadProject(currentProject.id);
+                } catch (e) { alert(e); }
+                finally {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('loadingOverlay').classList.remove('flex');
+                }
+            }
+
+            // --- View 5: MoFu ---
+            function renderMoFu() {
+                const tbody = document.getElementById('mofuTable');
+                tbody.innerHTML = '';
+
+                const topics = projectPages.filter(p => p.page_type === 'Topic' && p.funnel_stage === 'MoFu');
+
+                if (topics.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">No MoFu topics generated yet. Go to "Product / Pillars" and select "Generate MoFu".</td></tr>';
+                    return;
+                }
+
+                // Group by Source Page
+                const grouped = {};
+                topics.forEach(t => {
+                    const sourceId = t.source_page_id || 'unknown';
+                    if (!grouped[sourceId]) grouped[sourceId] = [];
+                    grouped[sourceId].push(t);
+                });
+
+                let htmlContent = '';
+                for (const [sourceId, groupTopics] of Object.entries(grouped)) {
+                    const sourcePage = projectPages.find(p => p.id === sourceId);
+                    const sourceTitle = sourcePage ? (sourcePage.tech_audit_data?.title || sourcePage.url) : 'Unknown Source';
+
+                    // Header Row for Product
+                    htmlContent += `
                     <tr class="bg-gray-800/50 border-b border-gray-800">
                         <td colspan="9" class="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <i data-lucide="folder" class="w-3 h-3 inline mr-2"></i> ${sourceTitle} <span class="ml-2 text-gray-600">(${groupTopics.length})</span>
@@ -1832,15 +1834,15 @@
                     </tr>
                 `;
 
-                // Topic Rows
-                htmlContent += groupTopics.map(t => {
-                    const data = t.tech_audit_data || {};
-                    const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
+                    // Topic Rows
+                    htmlContent += groupTopics.map(t => {
+                        const data = t.tech_audit_data || {};
+                        const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
 
-                    // Helper to escape quotes for onclick
-                    const safeStr = (str) => (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        // Helper to escape quotes for onclick
+                        const safeStr = (str) => (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
-                    return `
+                        return `
                         <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                             <td class="px-6 py-4 font-medium text-white text-sm pl-10 min-w-[350px]">
                                 <div class="flex items-center gap-2">
@@ -1877,82 +1879,82 @@
                             <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs" title="${t.slug}">${t.slug || '-'}</td>
                         </tr>
                     `;
-                }).join('');
-            }
-            tbody.innerHTML = htmlContent;
-            lucide.createIcons();
-        }
-
-        async function handleMoFuAction(pageId, action) {
-            if (action === 'Idle') return;
-
-            if (action === 'PushWebflow') {
-                alert("Push to Webflow is a placeholder for now.");
-                return;
+                    }).join('');
+                }
+                tbody.innerHTML = htmlContent;
+                lucide.createIcons();
             }
 
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
+            async function handleMoFuAction(pageId, action) {
+                if (action === 'Idle') return;
 
-            try {
-                const apiAction = action === 'Generate Content' ? 'generate_content' :
-                    action === 'Generate ToFu' ? 'generate_tofu' :
-                        action === 'Generate Sub-Silo' ? 'generate_sub_silo' : 'idle';
+                if (action === 'PushWebflow') {
+                    alert("Push to Webflow is a placeholder for now.");
+                    return;
+                }
 
-                await fetch(`${API_BASE}/batch-update-pages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_ids: [pageId], action: apiAction })
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
+
+                try {
+                    const apiAction = action === 'Generate Content' ? 'generate_content' :
+                        action === 'Generate ToFu' ? 'generate_tofu' :
+                            action === 'Generate Sub-Silo' ? 'generate_sub_silo' : 'idle';
+
+                    await fetch(`${API_BASE}/batch-update-pages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page_ids: [pageId], action: apiAction })
+                    });
+                    await loadProject(currentProject.id);
+                } catch (e) { alert(e); }
+                finally {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('loadingOverlay').classList.remove('flex');
+                }
+            }
+
+            // --- View 6: ToFu ---
+            function renderToFu() {
+                const tbody = document.getElementById('tofuTable');
+                tbody.innerHTML = '';
+
+                const tofus = projectPages.filter(p => p.page_type === 'Topic' && p.funnel_stage === 'ToFu');
+
+                if (tofus.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">No ToFu topics generated yet. Go to "MoFu / Silo Topics" and select "Generate ToFu".</td></tr>';
+                    return;
+                }
+
+                // Grouping: Product -> MoFu -> ToFu
+                // 1. Group ToFus by MoFu ID
+                const byMoFu = {};
+                tofus.forEach(t => {
+                    const mofuId = t.source_page_id || 'unknown';
+                    if (!byMoFu[mofuId]) byMoFu[mofuId] = [];
+                    byMoFu[mofuId].push(t);
                 });
-                await loadProject(currentProject.id);
-            } catch (e) { alert(e); }
-            finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                document.getElementById('loadingOverlay').classList.remove('flex');
-            }
-        }
 
-        // --- View 6: ToFu ---
-        function renderToFu() {
-            const tbody = document.getElementById('tofuTable');
-            tbody.innerHTML = '';
+                // 2. Group MoFus by Product ID
+                const byProduct = {};
+                Object.keys(byMoFu).forEach(mofuId => {
+                    const mofuPage = projectPages.find(p => p.id === mofuId);
+                    const productId = mofuPage ? mofuPage.source_page_id : 'unknown';
 
-            const tofus = projectPages.filter(p => p.page_type === 'Topic' && p.funnel_stage === 'ToFu');
-
-            if (tofus.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">No ToFu topics generated yet. Go to "MoFu / Silo Topics" and select "Generate ToFu".</td></tr>';
-                return;
-            }
-
-            // Grouping: Product -> MoFu -> ToFu
-            // 1. Group ToFus by MoFu ID
-            const byMoFu = {};
-            tofus.forEach(t => {
-                const mofuId = t.source_page_id || 'unknown';
-                if (!byMoFu[mofuId]) byMoFu[mofuId] = [];
-                byMoFu[mofuId].push(t);
-            });
-
-            // 2. Group MoFus by Product ID
-            const byProduct = {};
-            Object.keys(byMoFu).forEach(mofuId => {
-                const mofuPage = projectPages.find(p => p.id === mofuId);
-                const productId = mofuPage ? mofuPage.source_page_id : 'unknown';
-
-                if (!byProduct[productId]) byProduct[productId] = [];
-                byProduct[productId].push({
-                    mofu: mofuPage,
-                    tofus: byMoFu[mofuId]
+                    if (!byProduct[productId]) byProduct[productId] = [];
+                    byProduct[productId].push({
+                        mofu: mofuPage,
+                        tofus: byMoFu[mofuId]
+                    });
                 });
-            });
 
-            // 3. Render
-            for (const [productId, mofuGroups] of Object.entries(byProduct)) {
-                const productPage = projectPages.find(p => p.id === productId);
-                const productTitle = productPage ? (productPage.tech_audit_data?.title || productPage.url) : 'Unknown Product';
+                // 3. Render
+                for (const [productId, mofuGroups] of Object.entries(byProduct)) {
+                    const productPage = projectPages.find(p => p.id === productId);
+                    const productTitle = productPage ? (productPage.tech_audit_data?.title || productPage.url) : 'Unknown Product';
 
-                // Level 1: Product Header
-                tbody.innerHTML += `
+                    // Level 1: Product Header
+                    tbody.innerHTML += `
                     <tr class="bg-gray-900 border-b border-gray-800">
                         <td colspan="9" class="px-6 py-3 text-sm font-bold text-white uppercase tracking-wider">
                             <i data-lucide="box" class="w-4 h-4 inline mr-2 text-blue-500"></i> ${productTitle}
@@ -1960,11 +1962,11 @@
                     </tr>
                 `;
 
-                mofuGroups.forEach(group => {
-                    const mofuTitle = group.mofu ? (group.mofu.tech_audit_data?.title || group.mofu.content_description) : 'Unknown MoFu';
+                    mofuGroups.forEach(group => {
+                        const mofuTitle = group.mofu ? (group.mofu.tech_audit_data?.title || group.mofu.content_description) : 'Unknown MoFu';
 
-                    // Level 2: MoFu Header
-                    tbody.innerHTML += `
+                        // Level 2: MoFu Header
+                        tbody.innerHTML += `
                         <tr class="bg-gray-800/50 border-b border-gray-800">
                             <td colspan="9" class="px-6 py-2 text-xs font-medium text-gray-400 pl-12">
                                 <i data-lucide="folder" class="w-3 h-3 inline mr-2 text-purple-400"></i> ${mofuTitle} <span class="ml-2 text-gray-600">(${group.tofus.length})</span>
@@ -1972,15 +1974,15 @@
                         </tr>
                     `;
 
-                    // Level 3: ToFu Rows
-                    group.tofus.forEach(t => {
-                        const data = t.tech_audit_data || {};
-                        const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
+                        // Level 3: ToFu Rows
+                        group.tofus.forEach(t => {
+                            const data = t.tech_audit_data || {};
+                            const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
 
-                        // Helper to escape quotes for onclick
-                        const safeStr = (str) => (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                            // Helper to escape quotes for onclick
+                            const safeStr = (str) => (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
-                        tbody.innerHTML += `
+                            tbody.innerHTML += `
                             <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                                 <td class="px-6 py-4 font-medium text-white text-sm pl-16 min-w-[350px]">
                                     <div class="flex items-center gap-2">
@@ -2016,178 +2018,178 @@
                                 <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs" title="${t.slug}">${t.slug || '-'}</td>
                             </tr>
                         `;
+                        });
                     });
-                });
-            }
-            lucide.createIcons();
-        }
-
-        async function handleToFuAction(pageId, action) {
-            if (action === 'Idle') return;
-
-            if (action === 'PushWebflow') {
-                alert("Push to Webflow is a placeholder for now.");
-                return;
+                }
+                lucide.createIcons();
             }
 
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
+            async function handleToFuAction(pageId, action) {
+                if (action === 'Idle') return;
 
-            try {
-                await fetch(`${API_BASE}/batch-update-pages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_ids: [pageId], action: 'generate_content' }) // Reusing generate_content
-                });
-                await loadProject(currentProject.id);
-            } catch (e) { alert(e); }
-            finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                document.getElementById('loadingOverlay').classList.remove('flex');
-            }
-        }
+                if (action === 'PushWebflow') {
+                    alert("Push to Webflow is a placeholder for now.");
+                    return;
+                }
 
-        // --- Modals ---
-        function openNewProjectModal() {
-            document.getElementById('newProjectModal').classList.remove('hidden');
-            document.getElementById('newProjectModal').classList.add('flex');
-        }
-        function closeNewProjectModal() {
-            document.getElementById('newProjectModal').classList.add('hidden');
-            document.getElementById('newProjectModal').classList.remove('flex');
-        }
-        async function createProject() {
-            const domain = document.getElementById('newDomain').value;
-            const language = document.getElementById('newLanguage').value;
-            const location = document.getElementById('newLocation').value;
-            const focus = document.getElementById('newFocus').value;
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
 
-            if (!domain) {
-                alert('Please enter a domain');
-                return;
+                try {
+                    await fetch(`${API_BASE}/batch-update-pages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page_ids: [pageId], action: 'generate_content' }) // Reusing generate_content
+                    });
+                    await loadProject(currentProject.id);
+                } catch (e) { alert(e); }
+                finally {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('loadingOverlay').classList.remove('flex');
+                }
             }
 
-            closeNewProjectModal();
-
-            // Show loading
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
-
-            try {
-                const res = await fetch(`${API_BASE}/create-project`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ domain, language, location, focus })
-                });
-                const data = await res.json();
-
-                // Reload projects list (refreshes dropdown)
-                await loadProjectsList();
-
-                // Show success message
-                alert(`✓ Project "${domain}" created successfully! Select it from the dropdown above.`);
-
-                // Clear form
-                document.getElementById('newDomain').value = '';
-            } catch (e) {
-                alert('Error creating project: ' + e.message);
-            } finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                document.getElementById('loadingOverlay').classList.remove('flex');
+            // --- Modals ---
+            function openNewProjectModal() {
+                document.getElementById('newProjectModal').classList.remove('hidden');
+                document.getElementById('newProjectModal').classList.add('flex');
             }
-        }
-
-        async function deleteProject(id, name) {
-            if (!confirm(`Are you sure you want to delete project "${name}"? This action cannot be undone.`)) {
-                return;
+            function closeNewProjectModal() {
+                document.getElementById('newProjectModal').classList.add('hidden');
+                document.getElementById('newProjectModal').classList.remove('flex');
             }
+            async function createProject() {
+                const domain = document.getElementById('newDomain').value;
+                const language = document.getElementById('newLanguage').value;
+                const location = document.getElementById('newLocation').value;
+                const focus = document.getElementById('newFocus').value;
 
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
+                if (!domain) {
+                    alert('Please enter a domain');
+                    return;
+                }
 
-            try {
-                const res = await fetch(`${API_BASE}/projects/${id}`, {
-                    method: 'DELETE'
-                });
+                closeNewProjectModal();
 
-                if (!res.ok) {
+                // Show loading
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
+
+                try {
+                    const res = await fetch(`${API_BASE}/create-project`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain, language, location, focus })
+                    });
                     const data = await res.json();
-                    throw new Error(data.error || 'Failed to delete project');
-                }
 
-                // If deleted project was selected, clear selection
-                if (currentProject && currentProject.id === id) {
-                    currentProject = null;
-                    document.getElementById('selectedProjectLabel').textContent = 'Select Project...';
-                    // Hide other tabs content or switch to projects tab
-                    switchMainTab('projects');
-                }
+                    // Reload projects list (refreshes dropdown)
+                    await loadProjectsList();
 
-                await loadProjectsList();
-                alert('Project deleted successfully.');
-            } catch (e) {
-                console.error(e);
-                alert('Error deleting project: ' + e.message);
-            } finally {
-                document.getElementById('loadingOverlay').classList.add('hidden');
-                document.getElementById('loadingOverlay').classList.remove('flex');
+                    // Show success message
+                    alert(`✓ Project "${domain}" created successfully! Select it from the dropdown above.`);
+
+                    // Clear form
+                    document.getElementById('newDomain').value = '';
+                } catch (e) {
+                    alert('Error creating project: ' + e.message);
+                } finally {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('loadingOverlay').classList.remove('flex');
+                }
             }
-        }
+
+            async function deleteProject(id, name) {
+                if (!confirm(`Are you sure you want to delete project "${name}"? This action cannot be undone.`)) {
+                    return;
+                }
+
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+                document.getElementById('loadingOverlay').classList.add('flex');
+
+                try {
+                    const res = await fetch(`${API_BASE}/projects/${id}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (!res.ok) {
+                        const data = await res.json();
+                        throw new Error(data.error || 'Failed to delete project');
+                    }
+
+                    // If deleted project was selected, clear selection
+                    if (currentProject && currentProject.id === id) {
+                        currentProject = null;
+                        document.getElementById('selectedProjectLabel').textContent = 'Select Project...';
+                        // Hide other tabs content or switch to projects tab
+                        switchMainTab('projects');
+                    }
+
+                    await loadProjectsList();
+                    alert('Project deleted successfully.');
+                } catch (e) {
+                    console.error(e);
+                    alert('Error deleting project: ' + e.message);
+                } finally {
+                    document.getElementById('loadingOverlay').classList.add('hidden');
+                    document.getElementById('loadingOverlay').classList.remove('flex');
+                }
+            }
 
     </script>
     <script>
-        // --- View 7: Product Photoshoot ---
-        let photoshoots = [];
+            // --- View 7: Product Photoshoot ---
+            let photoshoots = [];
 
-        async function loadPhotoshoots() {
-            if (!currentProject) {
-                console.log('No current project, skipping loadPhotoshoots');
-                return;
-            }
-            console.log('Loading photoshoots for project:', currentProject.id);
-            try {
-                const url = `${API_BASE}/photoshoots?project_id=${currentProject.id}`;
-                console.log('Fetching:', url);
-                const res = await fetch(url);
-                const data = await res.json();
-                console.log('Loaded photoshoots data:', data);
-                // Handle both array (direct list) and object (wrapped) formats
-                photoshoots = Array.isArray(data) ? data : (data.photoshoots || []);
-                console.log('Photoshoots array:', photoshoots);
-                renderPhotoshoot();
-            } catch (e) {
-                console.error('Error loading photoshoots:', e);
-                photoshoots = [];
-                renderPhotoshoot();
-            }
-        }
-
-        function renderPhotoshoot() {
-            console.log('Rendering photoshoot table with', photoshoots.length, 'items');
-            const tbody = document.getElementById('photoshootTable');
-            if (!tbody) {
-                console.error('photoshootTable element not found!');
-                return;
-            }
-            tbody.innerHTML = '';
-
-            if (photoshoots.length === 0) {
-                console.log('No photoshoots to render');
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-500">No photoshoot tasks. Click "Add Row" to start.</td></tr>';
-                return;
+            async function loadPhotoshoots() {
+                if (!currentProject) {
+                    console.log('No current project, skipping loadPhotoshoots');
+                    return;
+                }
+                console.log('Loading photoshoots for project:', currentProject.id);
+                try {
+                    const url = `${API_BASE}/photoshoots?project_id=${currentProject.id}`;
+                    console.log('Fetching:', url);
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    console.log('Loaded photoshoots data:', data);
+                    // Handle both array (direct list) and object (wrapped) formats
+                    photoshoots = Array.isArray(data) ? data : (data.photoshoots || []);
+                    console.log('Photoshoots array:', photoshoots);
+                    renderPhotoshoot();
+                } catch (e) {
+                    console.error('Error loading photoshoots:', e);
+                    photoshoots = [];
+                    renderPhotoshoot();
+                }
             }
 
-            photoshoots.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = 'hover:bg-gray-800/50 transition-colors border-b border-gray-700 group';
+            function renderPhotoshoot() {
+                console.log('Rendering photoshoot table with', photoshoots.length, 'items');
+                const tbody = document.getElementById('photoshootTable');
+                if (!tbody) {
+                    console.error('photoshootTable element not found!');
+                    return;
+                }
+                tbody.innerHTML = '';
 
-                // Status colors matching Airtable screenshot
-                let statusClass = 'bg-gray-700 text-gray-300';
-                if (item.status === 'Done') statusClass = 'bg-green-900/40 text-green-400 border border-green-500/30';
-                if (item.status === 'Todo' || item.status === 'Pending') statusClass = 'bg-pink-900/30 text-pink-300 border border-pink-500/30';
-                if (item.status === 'Processing') statusClass = 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30';
+                if (photoshoots.length === 0) {
+                    console.log('No photoshoots to render');
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-500">No photoshoot tasks. Click "Add Row" to start.</td></tr>';
+                    return;
+                }
 
-                row.innerHTML = `
+                photoshoots.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-800/50 transition-colors border-b border-gray-700 group';
+
+                    // Status colors matching Airtable screenshot
+                    let statusClass = 'bg-gray-700 text-gray-300';
+                    if (item.status === 'Done') statusClass = 'bg-green-900/40 text-green-400 border border-green-500/30';
+                    if (item.status === 'Todo' || item.status === 'Pending') statusClass = 'bg-pink-900/30 text-pink-300 border border-pink-500/30';
+                    if (item.status === 'Processing') statusClass = 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30';
+
+                    row.innerHTML = `
                     <td class="px-2 py-1 border-r border-gray-800 w-10 text-center text-gray-500 text-xs">
                         ${index + 1}
                     </td>
@@ -2211,23 +2213,23 @@
                     <td class="px-2 py-1 border-r border-gray-800 w-32 text-center">
                         <div class="flex items-center justify-center gap-2">
                             ${item.enhanced_output ?
-                        renderImageThumbnail(item.enhanced_output, 'enhanced', item.id) :
-                        (item.output_image ?
-                            `<button onclick="handlePhotoshootAction('${item.id}', 'Upscale')" 
+                            renderImageThumbnail(item.enhanced_output, 'enhanced', item.id) :
+                            (item.output_image ?
+                                `<button onclick="handlePhotoshootAction('${item.id}', 'Upscale')" 
                                         class="p-1.5 hover:bg-indigo-500/20 rounded text-indigo-400 hover:text-indigo-300 transition-colors"
                                         title="Upscale / Enhance">
                                         <i data-lucide="wand-2" class="w-4 h-4"></i>
                                     </button>` : ''
-                        )
-                    }
+                            )
+                        }
                             
                             ${!item.output_image ?
-                        `<button onclick="handlePhotoshootAction('${item.id}', 'Run')" 
+                            `<button onclick="handlePhotoshootAction('${item.id}', 'Run')" 
                                     class="p-1.5 hover:bg-violet-500/20 rounded text-violet-400 hover:text-violet-300 transition-colors"
                                     title="Run Generation">
                                     <i data-lucide="play" class="w-4 h-4"></i>
                                 </button>` : ''
-                    }
+                        }
                             
                             <button onclick="deletePhotoshoot('${item.id}')" 
                                 class="p-1.5 hover:bg-red-500/20 rounded text-gray-500 hover:text-red-400 transition-colors"
@@ -2238,15 +2240,15 @@
                     </td>
                 `;
 
-                tbody.appendChild(row);
-            });
+                    tbody.appendChild(row);
+                });
 
-            lucide.createIcons();
-        }
+                lucide.createIcons();
+            }
 
-        function renderImageThumbnail(imageUrl, type, itemId) {
-            if (!imageUrl) {
-                return `
+            function renderImageThumbnail(imageUrl, type, itemId) {
+                if (!imageUrl) {
+                    return `
                     <div class="flex justify-center">
                         <label class="w-10 h-10 bg-gray-800 border border-gray-700 rounded flex items-center justify-center cursor-pointer hover:border-violet-500 hover:bg-gray-700 transition-all">
                             <i data-lucide="plus" class="w-4 h-4 text-gray-500"></i>
@@ -2255,9 +2257,9 @@
                         </label>
                     </div>
                 `;
-            }
+                }
 
-            return `
+                return `
                 <div class="flex justify-center">
                     <div class="relative w-10 h-10 rounded overflow-hidden bg-gray-900 group cursor-pointer border border-gray-700">
                         <img src="${imageUrl}" class="w-full h-full object-cover" alt="${type}">
@@ -2270,158 +2272,158 @@
                     </div>
                 </div>
             `;
-        }
-
-        function downloadImage(url) {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = url.split('/').pop();
-            link.click();
-        }
-
-        async function addPhotoshootRow() {
-            console.log('Add Row clicked');
-
-            if (!currentProject) {
-                alert('Please select a project first from the dropdown or Projects dashboard.');
-                return;
             }
 
-            const btn = document.querySelector('button[onclick="addPhotoshootRow()"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Adding...';
-            btn.disabled = true;
-            lucide.createIcons();
+            function downloadImage(url) {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = url.split('/').pop();
+                link.click();
+            }
 
-            try {
-                console.log('Sending request to:', `${API_BASE}/photoshoots`);
+            async function addPhotoshootRow() {
+                console.log('Add Row clicked');
 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-                const res = await fetch(`${API_BASE}/photoshoots`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        project_id: currentProject.id,
-                        prompt: '',
-                        status: 'Pending'
-                    }),
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                console.log('Response status:', res.status);
-
-                if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.error || `Server error: ${res.status}`);
+                if (!currentProject) {
+                    alert('Please select a project first from the dropdown or Projects dashboard.');
+                    return;
                 }
 
-                const data = await res.json();
-                console.log('Created task:', data);
-                await loadPhotoshoots();
-            } catch (e) {
-                console.error('Error adding photoshoot:', e);
-                alert('Error adding row: ' + e.message + '\nCheck console for details.');
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                const btn = document.querySelector('button[onclick="addPhotoshootRow()"]');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Adding...';
+                btn.disabled = true;
                 lucide.createIcons();
-            }
-        }
-
-
-
-        async function updatePhotoshoot(id, field, value) {
-            // Update local state immediately
-            const item = photoshoots.find(p => p.id === id);
-            if (item) item[field] = value;
-
-            try {
-                await fetch(`${API_BASE}/photoshoots/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ [field]: value })
-                });
-            } catch (e) { console.error(e); }
-        }
-
-        async function uploadPhotoshootImage(id, file, type = 'input') {
-            if (!file) return;
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const res = await fetch(`${API_BASE}/upload`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-                if (data.url) {
-                    const field = type === 'input' ? 'input_image' : 'output_image';
-                    await updatePhotoshoot(id, field, data.url);
-                    loadPhotoshoots();
-                }
-            } catch (e) { alert(e); }
-        }
-
-        async function handlePhotoshootAction(id, action) {
-            if (action === 'Idle') return;
-
-            if (action === 'Run' || action === 'Upscale') {
-                if (action === 'Run') {
-                    const item = photoshoots.find(p => p.id === id);
-                    if (!item || !item.prompt) {
-                        alert("Please enter a prompt first.");
-                        return;
-                    }
-                }
-
-                // Update local state to show processing
-                const row = photoshoots.find(p => p.id === id);
-                if (row) row.status = 'Processing';
-                renderPhotoshoot();
 
                 try {
-                    // Call the PUT endpoint with action
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+                    console.log('Sending request to:', `${API_BASE}/photoshoots`);
 
-                    const res = await fetch(`${API_BASE}/photoshoots/${id}`, {
-                        method: 'PUT',
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+                    const res = await fetch(`${API_BASE}/photoshoots`, {
+                        method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: action.toLowerCase() }),
+                        body: JSON.stringify({
+                            project_id: currentProject.id,
+                            prompt: '',
+                            status: 'Pending'
+                        }),
                         signal: controller.signal
                     });
 
                     clearTimeout(timeoutId);
 
-                    const data = await res.json();
+                    console.log('Response status:', res.status);
 
                     if (!res.ok) {
-                        throw new Error(data.error || 'Operation failed');
+                        const error = await res.json();
+                        throw new Error(error.error || `Server error: ${res.status}`);
                     }
 
-                    // Reload to show updated status and output image
+                    const data = await res.json();
+                    console.log('Created task:', data);
                     await loadPhotoshoots();
                 } catch (e) {
-                    console.error(e);
-                    alert(`${action} failed: ` + e.message);
-                    if (row) row.status = 'Failed';
-                    renderPhotoshoot();
+                    console.error('Error adding photoshoot:', e);
+                    alert('Error adding row: ' + e.message + '\nCheck console for details.');
+                } finally {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    lucide.createIcons();
                 }
             }
-        }
 
-        async function deletePhotoshoot(id) {
-            if (!confirm("Delete this task?")) return;
-            try {
-                await fetch(`${API_BASE}/photoshoots/${id}`, { method: 'DELETE' });
-                loadPhotoshoots();
-            } catch (e) { alert(e); }
-        }
+
+
+            async function updatePhotoshoot(id, field, value) {
+                // Update local state immediately
+                const item = photoshoots.find(p => p.id === id);
+                if (item) item[field] = value;
+
+                try {
+                    await fetch(`${API_BASE}/photoshoots/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ [field]: value })
+                    });
+                } catch (e) { console.error(e); }
+            }
+
+            async function uploadPhotoshootImage(id, file, type = 'input') {
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const res = await fetch(`${API_BASE}/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                        const field = type === 'input' ? 'input_image' : 'output_image';
+                        await updatePhotoshoot(id, field, data.url);
+                        loadPhotoshoots();
+                    }
+                } catch (e) { alert(e); }
+            }
+
+            async function handlePhotoshootAction(id, action) {
+                if (action === 'Idle') return;
+
+                if (action === 'Run' || action === 'Upscale') {
+                    if (action === 'Run') {
+                        const item = photoshoots.find(p => p.id === id);
+                        if (!item || !item.prompt) {
+                            alert("Please enter a prompt first.");
+                            return;
+                        }
+                    }
+
+                    // Update local state to show processing
+                    const row = photoshoots.find(p => p.id === id);
+                    if (row) row.status = 'Processing';
+                    renderPhotoshoot();
+
+                    try {
+                        // Call the PUT endpoint with action
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+                        const res = await fetch(`${API_BASE}/photoshoots/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: action.toLowerCase() }),
+                            signal: controller.signal
+                        });
+
+                        clearTimeout(timeoutId);
+
+                        const data = await res.json();
+
+                        if (!res.ok) {
+                            throw new Error(data.error || 'Operation failed');
+                        }
+
+                        // Reload to show updated status and output image
+                        await loadPhotoshoots();
+                    } catch (e) {
+                        console.error(e);
+                        alert(`${action} failed: ` + e.message);
+                        if (row) row.status = 'Failed';
+                        renderPhotoshoot();
+                    }
+                }
+            }
+
+            async function deletePhotoshoot(id) {
+                if (!confirm("Delete this task?")) return;
+                try {
+                    await fetch(`${API_BASE}/photoshoots/${id}`, { method: 'DELETE' });
+                    loadPhotoshoots();
+                } catch (e) { alert(e); }
+            }
     </script>
 </body>
 
