@@ -968,18 +968,7 @@
                 document.getElementById('loadingOverlay').classList.remove('flex');
             }
         }
-        if (p && p.business_summary) {
-            showOverview(projectId);
-        }
 
-            } catch (e) {
-            console.error(e);
-            alert("Failed to generate profile");
-        } finally {
-            document.getElementById('loadingOverlay').classList.add('hidden');
-            document.getElementById('loadingOverlay').classList.remove('flex');
-        }
-        }
 
         async function runAudit(projectId) {
             document.getElementById('loadingOverlay').classList.remove('hidden');
