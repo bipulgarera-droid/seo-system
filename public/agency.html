@@ -1040,6 +1040,8 @@
         }
 
         function renderUrlInspection(tbody) {
+            if (!currentProject) return;
+
             const rows = projectPages.map(p => {
                 const data = p.tech_audit_data || {};
 
