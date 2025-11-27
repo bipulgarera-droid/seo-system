@@ -1305,20 +1305,20 @@ def auto_classify():
         You are an SEO Site Auditor.
         Business: {profile.get('business_summary')}
         
-        Task: Classify the following pages into their Funnel Stage.
+        Task: Classify the following pages into their Type.
         
         Categories:
-        - BoFu (Bottom of Funnel): Product pages, Pricing, Sign up, "Book a Demo", specific feature pages. (High conversion intent).
-        - MoFu (Middle of Funnel): Case studies, Comparisons, "Best X Tools", Whitepapers. (Evaluation intent).
-        - ToFu (Top of Funnel): Blog posts, Guides, "What is X", Definitions. (Learning intent).
-        - Ignore: Login, Terms of Service, Privacy Policy, 404, generic contact pages.
+        - Product: Individual product pages, specific service pages, "Book a Demo" (if product specific).
+        - Category: Collections of products, "All Services", "Solutions" overview, Blog archive/category pages.
+        - Other: Blog posts, About Us, Contact, Login, Privacy Policy, Homepage, 404.
         
         Pages to Classify:
         {urls_list}
         
         Output JSON format:
         [
-            {{ "id": "page_id", "stage": "BoFu" }},
+            {{ "id": "page_id", "stage": "Product" }},
+            {{ "id": "page_id", "stage": "Category" }},
             ...
         ]
         """
@@ -1340,6 +1340,7 @@ def auto_classify():
             stage = item.get('stage')
             pid = item.get('id')
             if stage and pid:
+                # Map 'Other' to 'Other' (or keep as is)
                 supabase.table('pages').update({'funnel_stage': stage}).eq('id', pid).execute()
                 count += 1
                 
