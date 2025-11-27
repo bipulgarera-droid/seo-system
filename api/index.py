@@ -955,6 +955,10 @@ def run_project_setup():
     try:
         data = request.get_json()
         project_id = data.get('project_id')
+        do_audit = data.get('do_audit', False)
+        do_profile = data.get('do_profile', False) # Default to False to separate actions
+        max_pages = data.get('max_pages', 200)
+
         if not project_id: return jsonify({"error": "project_id required"}), 400
         
         # Fetch Project Details
@@ -963,101 +967,104 @@ def run_project_setup():
         project = proj_res.data[0]
         domain = project['domain']
         
-        print(f"Starting Setup for {domain}...")
+        print(f"Starting Setup for {domain} (Audit: {do_audit}, Profile: {do_profile}, Max Pages: {max_pages})...")
         
-        # 1. Research Business (The Brain)
-        print("Starting Gemini research...")
-        try:
-            tools = [{'google_search': {}}]
-            model = genai.GenerativeModel('gemini-2.0-flash-exp', tools=tools)
-        except:
-            print("Warning: Google Search tool failed. Using standard model.")
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        
-        prompt = f"""
-        You are an expert business analyst. Research the website {domain} and create a comprehensive Business Profile.
-        
-        Context:
-        - Language: {project.get('language')}
-        - Location: {project.get('location')}
-        - Focus: {project.get('focus')}
-        
-        I need you to find:
-        1. Business Summary: What do they do? (1 paragraph)
-        2. Ideal Customer Profile (ICP): Who are they selling to? Be specific.
-        3. Brand Voice: How do they sound?
-        4. Primary Products: List their main products/services.
-        5. Competitors: List 3-5 potential competitors.
-        6. Unique Selling Points (USPs): What makes them different?
-        
-        Return JSON:
-        {{
-            "business_summary": "...",
-            "ideal_customer_profile": "...",
-            "brand_voice": "...",
-            "primary_products": ["..."],
-            "competitors": ["..."],
-            "unique_selling_points": ["..."]
-        }}
-        """
-        
-        response = model.generate_content(prompt)
-        
-        # Parse JSON
-        import json
-        text = response.text.strip()
-        if text.startswith('```json'): text = text[7:]
-        if text.startswith('```'): text = text[3:]
-        if text.endswith('```'): text = text[:-3]
-        
-        profile_data = json.loads(text.strip())
-        
-        # 2. Generate Content Strategy Plan
-        print("Generating Strategy Plan...")
-        strategy_prompt = f"""
-        Based on this business profile:
-        {json.dumps(profile_data)}
-        
-        Create a high-level Content Strategy Plan following the "Bottom-Up" approach:
-        1. Bottom Funnel (BoFu): What product/service pages need optimization?
-        2. Middle Funnel (MoFu): What comparison/best-of topics link to BoFu?
-        3. Top Funnel (ToFu): What informational topics link to MoFu?
-        
-        Return a short markdown summary of the strategy.
-        """
-        strategy_res = model.generate_content(strategy_prompt)
-        strategy_plan = strategy_res.text
-        
-        # Save Business Profile
-        # WORKAROUND: Append Strategy Plan to Business Summary for persistence
-        combined_summary = profile_data.get("business_summary", "")
-        if strategy_plan:
-            combined_summary += "\n\n===STRATEGY_PLAN===\n\n" + strategy_plan
+        profile_data = {}
+        strategy_plan = ""
 
-        profile_insert = {
-            "project_id": project_id,
-            "business_summary": combined_summary,
-            "ideal_customer_profile": profile_data.get("ideal_customer_profile"),
-            "brand_voice": profile_data.get("brand_voice"),
-            "primary_products": profile_data.get("primary_products"),
-            "competitors": profile_data.get("competitors"),
-            "unique_selling_points": profile_data.get("unique_selling_points")
-        }
-        
-        # Check if exists, update or insert
-        existing = supabase.table('business_profiles').select('id').eq('project_id', project_id).execute()
-        if existing.data:
-            supabase.table('business_profiles').update(profile_insert).eq('id', existing.data[0]['id']).execute()
-        else:
-            supabase.table('business_profiles').insert(profile_insert).execute()
+        # 1. Research Business (The Brain)
+        if do_profile:
+            print("Starting Gemini research...")
+            try:
+                tools = [{'google_search': {}}]
+                model = genai.GenerativeModel('gemini-2.0-flash-exp', tools=tools)
+            except:
+                print("Warning: Google Search tool failed. Using standard model.")
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            prompt = f"""
+            You are an expert business analyst. Research the website {domain} and create a comprehensive Business Profile.
+            
+            Context:
+            - Language: {project.get('language')}
+            - Location: {project.get('location')}
+            - Focus: {project.get('focus')}
+            
+            I need you to find:
+            1. Business Summary: What do they do? (1 paragraph)
+            2. Ideal Customer Profile (ICP): Who are they selling to? Be specific.
+            3. Brand Voice: How do they sound?
+            4. Primary Products: List their main products/services.
+            5. Competitors: List 3-5 potential competitors.
+            6. Unique Selling Points (USPs): What makes them different?
+            
+            Return JSON:
+            {{
+                "business_summary": "...",
+                "ideal_customer_profile": "...",
+                "brand_voice": "...",
+                "primary_products": ["..."],
+                "competitors": ["..."],
+                "unique_selling_points": ["..."]
+            }}
+            """
+            
+            response = model.generate_content(prompt)
+            
+            # Parse JSON
+            import json
+            text = response.text.strip()
+            if text.startswith('```json'): text = text[7:]
+            if text.startswith('```'): text = text[3:]
+            if text.endswith('```'): text = text[:-3]
+            
+            profile_data = json.loads(text.strip())
+            
+            # 2. Generate Content Strategy Plan
+            print("Generating Strategy Plan...")
+            strategy_prompt = f"""
+            Based on this business profile:
+            {json.dumps(profile_data)}
+            
+            Create a high-level Content Strategy Plan following the "Bottom-Up" approach:
+            1. Bottom Funnel (BoFu): What product/service pages need optimization?
+            2. Middle Funnel (MoFu): What comparison/best-of topics link to BoFu?
+            3. Top Funnel (ToFu): What informational topics link to MoFu?
+            
+            Return a short markdown summary of the strategy.
+            """
+            strategy_res = model.generate_content(strategy_prompt)
+            strategy_plan = strategy_res.text
+            
+            # Save Business Profile
+            # WORKAROUND: Append Strategy Plan to Business Summary for persistence
+            combined_summary = profile_data.get("business_summary", "")
+            if strategy_plan:
+                combined_summary += "\n\n===STRATEGY_PLAN===\n\n" + strategy_plan
+
+            profile_insert = {
+                "project_id": project_id,
+                "business_summary": combined_summary,
+                "ideal_customer_profile": profile_data.get("ideal_customer_profile"),
+                "brand_voice": profile_data.get("brand_voice"),
+                "primary_products": profile_data.get("primary_products"),
+                "competitors": profile_data.get("competitors"),
+                "unique_selling_points": profile_data.get("unique_selling_points")
+            }
+            
+            # Check if exists, update or insert
+            existing = supabase.table('business_profiles').select('id').eq('project_id', project_id).execute()
+            if existing.data:
+                supabase.table('business_profiles').update(profile_insert).eq('id', existing.data[0]['id']).execute()
+            else:
+                supabase.table('business_profiles').insert(profile_insert).execute()
 
         # 3. Crawl Sitemap (The Map)
-        do_audit = data.get('do_audit', False)
         pages_to_insert = []
         
         if do_audit:
-            print("Starting sitemap crawl (Audit enabled)...")
-            pages_to_insert = crawl_sitemap(domain, project_id)
+            print(f"Starting sitemap crawl (Audit enabled, Max Pages: {max_pages})...")
+            pages_to_insert = crawl_sitemap(domain, project_id, max_pages=max_pages)
             
             if pages_to_insert:
                 print(f"Found {len(pages_to_insert)} pages. syncing with DB...")
