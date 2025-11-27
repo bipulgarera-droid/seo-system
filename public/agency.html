@@ -911,11 +911,15 @@
                 const data = await res.json();
 
                 // Refresh data
-                loadProject(projectId);
+                await loadProject(projectId);
+                await loadProjectsList(); // Refresh list to update counts in table
 
                 if (data.pages_found > 0) {
                     // Optional: Show toast
                     console.log(`Found ${data.pages_found} new pages.`);
+                    alert(`Scrape complete! Found ${data.pages_found} new pages.`);
+                } else {
+                    alert("Scrape complete. No new pages found.");
                 }
 
             } catch (e) {
@@ -945,20 +949,36 @@
 
                 // Refresh data
                 await loadProject(projectId); // Wait for reload to get new data
+                await loadProjectsList(); // Refresh list to update buttons in table
 
                 // Show Result in Modal (Re-using existing logic)
+                // We need to find the project from the NEW list
                 const p = allProjects.find(pr => pr.id === projectId);
                 if (p && p.business_summary) {
                     showOverview(projectId);
+                } else {
+                    alert("Generation complete, but summary not found. Please refresh.");
                 }
 
             } catch (e) {
                 console.error(e);
-                alert("Failed to generate profile");
+                alert("Failed to run generation");
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
             }
+        }
+        if (p && p.business_summary) {
+            showOverview(projectId);
+        }
+
+            } catch (e) {
+            console.error(e);
+            alert("Failed to generate profile");
+        } finally {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+            document.getElementById('loadingOverlay').classList.remove('flex');
+        }
         }
 
         async function runAudit(projectId) {
