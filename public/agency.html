@@ -546,7 +546,7 @@
     </div>
 
     <script>
-        const API_BASE = 'http://127.0.0.1:3000/api';
+        const API_BASE = '/api';
         let currentProject = null;
         let projectPages = [];
         let allProjects = [];
@@ -1490,8 +1490,23 @@
                         <ul class="list-disc list-inside text-gray-300 space-y-1">
                             ${researchData.key_insights.map(insight => `<li>${renderMarkdown(insight)}</li>`).join('')}
                         </ul>
-                    </div>` : ''
-                }
+                    </div>` : ''}
+
+                    ${researchData.scientific_gaps ? `
+                    <div>
+                        <h4 class="font-bold text-lg mb-2">Scientific & Technical Concepts</h4>
+                        <ul class="list-disc list-inside text-gray-300 space-y-1">
+                            ${researchData.scientific_gaps.map(gap => `<li>${renderMarkdown(gap)}</li>`).join('')}
+                        </ul>
+                    </div>` : ''}
+
+                    ${researchData.references ? `
+                    <div>
+                        <h4 class="font-bold text-lg mb-2">References & Citations</h4>
+                        <ul class="list-disc list-inside text-gray-300 space-y-1 text-xs font-mono bg-gray-900 p-3 rounded border border-gray-700">
+                            ${researchData.references.map(ref => `<li>${renderMarkdown(ref)}</li>`).join('')}
+                        </ul>
+                    </div>` : ''}
                 </div >
             `;
 

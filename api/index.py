@@ -2057,14 +2057,18 @@ Return ONLY the improved markdown content. Start with the meta description block
                 2. **Problem Analysis**: What specific problems are they facing? (e.g., "Why is my skin breaking out?", "Sunscreen makes me oily").
                 3. **Competitor Content Gap**: What are competitors writing about? What are they MISSING? Where can we add more value?
                 4. **SERP Analysis**: What types of content are ranking? (Guides, Videos, Lists).
-                
+                5. **Scientific/Technical Depth**: Identify specific scientific concepts, mechanisms, or technical details that explain the problem.
+                6. **References**: Find 3-5 authoritative sources (academic journals, industry reports, reputable news) that validate the problem or solution.
+
                 Output JSON:
                 {{
                     "user_questions": ["Detailed question 1", "Detailed question 2", ...],
                     "educational_gaps": ["Detailed gap analysis 1...", "Detailed gap analysis 2..."],
                     "key_insights": ["Insight 1 (with stats if found)...", "Insight 2..."],
                     "search_intent": "Comprehensive analysis of user intent, psychological state, and buying readiness...",
-                    "competitor_analysis": "Detailed breakdown of top 3 competitors and their content weaknesses..."
+                    "competitor_analysis": "Detailed breakdown of top 3 competitors and their content weaknesses...",
+                    "scientific_gaps": ["Technical/Scientific concept 1...", "Mechanism explanation..."],
+                    "references": ["Author, Date. Title. Source.", "Ref 2..."]
                 }}
                 """
                 
