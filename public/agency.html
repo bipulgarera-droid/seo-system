@@ -676,14 +676,22 @@
             document.getElementById('loadingOverlay').classList.remove('hidden');
             document.getElementById('loadingOverlay').classList.add('flex');
             try {
+                // Ensure projects are loaded
+                if (allProjects.length === 0) {
+                    await loadProjectsList();
+                }
+
                 // Find project metadata locally first
                 currentProject = allProjects.find(p => p.id === id);
 
-                // Update dropdown label
-                if (currentProject) {
-                    const label = document.getElementById('selectedProjectLabel');
-                    if (label) label.textContent = currentProject.domain;
+                if (!currentProject) {
+                    alert("Project not found. Please refresh the page.");
+                    return;
                 }
+
+                // Update dropdown label
+                const label = document.getElementById('selectedProjectLabel');
+                if (label) label.textContent = currentProject.domain;
 
                 const res = await fetch(`${API_BASE}/get-pages?project_id=${id}`);
                 const data = await res.json();
@@ -1003,6 +1011,11 @@
             // 2. Render Content
             const tbody = document.getElementById('techAuditTable');
             tbody.innerHTML = '';
+
+            if (!currentProject) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-red-500">Error: Project not loaded. Please go back to Projects list.</td></tr>';
+                return;
+            }
 
             if (projectPages.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-center py-8 text-gray-500">No pages found. Run "Start" on Projects tab first.</td></tr>';
@@ -1395,7 +1408,10 @@
             const tbody = document.getElementById('classificationTable');
             tbody.innerHTML = '';
 
-            if (!currentProject) return;
+            if (!currentProject) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-red-500">Error: Project not loaded. Please go back to Projects list.</td></tr>';
+                return;
+            }
 
             // Filter pages based on currentClassificationFilter
             // Use projectPages which is populated by loadProject
