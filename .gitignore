@@ -1,2 +1,15 @@
 .vercel
 .env*.local
+.env
+.env.development
+.env.production
+venv/
+__pycache__/
+*.pyc
+.venv/
+public/generated/
+public/uploads/
+backend.log
+.DS_Store
+*.sql
+*.backup
