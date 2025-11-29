@@ -1596,12 +1596,17 @@
                     body: JSON.stringify({
                         project_id: currentProject.id,
                         do_tech_audit: true,
-                        max_pages: 5 // Reduced to 5 for debugging
+                        max_pages: 20 // Increased to 20 (Safe for 60s timeout)
                     })
                 });
                 const data = await res.json();
                 console.log(`Audit complete! Updated ${data.pages_found || 0} pages.`);
                 await loadProject(currentProject.id);
+
+                // Force re-render of Tech Audit view
+                if (document.getElementById('view-tech-audit').classList.contains('active')) {
+                    renderTechAudit();
+                }
             } catch (e) {
                 alert('Error running audit: ' + e);
             } finally {

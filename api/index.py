@@ -767,8 +767,8 @@ def fetch_sitemap_urls(sitemap_url, project_id, headers, max_urls):
         
         if sitemap_tags:
             print(f"DEBUG: Found sitemap index with {len(sitemap_tags)} child sitemaps")
-            # Recursively fetch first 5 child sitemaps (increased from 2)
-            for i, sitemap_tag in enumerate(sitemap_tags[:5]):
+            # Recursively fetch ALL child sitemaps (removed limit of 5)
+            for i, sitemap_tag in enumerate(sitemap_tags):
                 if len(pages) >= max_urls:
                     break
                     
