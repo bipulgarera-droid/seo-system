@@ -912,7 +912,7 @@ def get_projects():
         # Fetch all pages for counts (optimization)
         try:
             # Increase limit to avoid missing pages (default is usually 1000)
-            all_pages_res = supabase.table('pages').select('project_id, page_type').limit(10000).execute()
+            all_pages_res = supabase.table('pages').select('project_id, page_type').limit(100000).execute()
             all_pages = all_pages_res.data if all_pages_res.data else []
         except Exception as e:
             print(f"Error fetching pages for counts: {e}")
@@ -1258,10 +1258,10 @@ def scrape_page_details(url):
     }
     
     try:
-        start_time = time.time()
-        
         # Rate Limit: Sleep 1 second before scraping to be polite
         time.sleep(1)
+        
+        start_time = time.time()
         
         # Use curl to bypass TLS fingerprinting
         content = fetch_with_curl(url)

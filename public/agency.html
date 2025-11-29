@@ -912,7 +912,7 @@
                                 <div class="flex flex-col items-center gap-1">
                                     <span class="text-green-500 font-medium text-xs">Done (${p.page_count})</span>
                                     <button onclick="event.stopPropagation(); runScrape('${p.id}', ${p.page_count})" class="text-xs text-blue-400 hover:text-blue-300 hover:underline">
-                                        Scrape More (+1000)
+                                        Scrape More
                                     </button>
                                 </div>
                                 `
@@ -1137,14 +1137,20 @@
                 if (data.pages_found > 0) {
                     // Optional: Show toast
                     console.log(`Found ${data.pages_found} new pages.`);
-                    alert(`Scrape complete! Found ${data.pages_found} new pages.`);
+                    // Success notification (Toast-like)
+                    const btn = document.querySelector(`button[onclick*="runScrape('${projectId}'"]`);
+                    if (btn) {
+                        const originalText = btn.innerText;
+                        btn.innerText = `✓ Found ${data.pages_found}`;
+                        setTimeout(() => btn.innerText = originalText, 3000);
+                    }
                 } else {
-                    alert("Scrape complete. No new pages found.");
+                    console.log("Scrape complete. No new pages found.");
                 }
 
+                await loadProjectsList();
             } catch (e) {
-                console.error(e);
-                alert("Failed to run scrape");
+                console.error("Scrape error:", e);
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
@@ -1596,9 +1602,12 @@
                     body: JSON.stringify({
                         project_id: currentProject.id,
                         do_tech_audit: true,
-                        max_pages: 10 // Reduced to 10 to avoid timeouts/rate-limits
+                        max_pages: 5 // Reduced to 5 to avoid browser timeouts (10s/page * 5 = 50s)
                     })
                 });
+
+                if (!res.ok) throw new Error("Request failed");
+
                 const data = await res.json();
                 console.log(`Audit complete! Updated ${data.pages_found || 0} pages.`);
                 await loadProject(currentProject.id);
@@ -1608,10 +1617,14 @@
                     renderTechAudit();
                 }
             } catch (e) {
-                alert('Error running audit: ' + e);
+                console.error('Error running audit:', e);
+                // Show error in button temporarily
+                btn.innerHTML = `<span class="text-red-400">Error (Retry)</span>`;
             } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
             }
         }
 
