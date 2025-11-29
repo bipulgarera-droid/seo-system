@@ -1975,7 +1975,7 @@ def perform_gemini_research(topic, location="US", language="English"):
         "citations": ["url1", "url2"]
     }
     """
-    log_debug(f"Starting Gemini Free Research for: {topic} (Loc: {location}, Lang: {language})")
+    log_debug(f"Starting Gemini 2.5 Flash Grounded Research for: {topic} (Loc: {location}, Lang: {language})")
     
     try:
         # Use new google-genai SDK with Grounding (FIXED!)
