@@ -641,9 +641,11 @@ from bs4 import BeautifulSoup
 import subprocess
 
 def fetch_with_curl(url, use_chrome_ua=True):
-    """Fetch URL using system curl to bypass TLS fingerprinting blocks."""
+    """Fetch URL using system curl to bypass TLS fingerprinting blocks. Returns (content, latency)."""
     try:
-        cmd = ['curl', '-L', '-s', '--max-time', '10']
+        # Use a delimiter to separate content from the time metric
+        delimiter = "|||CURL_TIME|||"
+        cmd = ['curl', '-L', '-s', '-w', f'{delimiter}%{{time_total}}', '--max-time', '10']
         
         if use_chrome_ua:
             cmd.extend([
@@ -661,14 +663,24 @@ def fetch_with_curl(url, use_chrome_ua=True):
             print(f"DEBUG: Chrome UA failed for {url}, retrying with default curl UA...")
             return fetch_with_curl(url, use_chrome_ua=False)
             
-        if result.returncode == 0:
-            return result.stdout
+        if result.returncode == 0 and result.stdout:
+            # Split content and time
+            parts = result.stdout.rsplit(delimiter, 1)
+            if len(parts) == 2:
+                content = parts[0]
+                try:
+                    latency = float(parts[1])
+                except:
+                    latency = 0
+                return content, latency
+            else:
+                return result.stdout, 0
         else:
             print(f"DEBUG: curl failed with code {result.returncode}: {result.stderr}")
-            return None
+            return None, 0
     except Exception as e:
         print(f"DEBUG: curl exception: {e}")
-        return None
+        return None, 0
 
 def crawl_sitemap(domain, project_id, max_pages=200):
     """Recursively crawl sitemaps with anti-bot headers"""
@@ -750,7 +762,7 @@ def fetch_sitemap_urls(sitemap_url, project_id, headers, max_urls):
     
     try:
         # Use curl to bypass TLS fingerprinting
-        content = fetch_with_curl(sitemap_url)
+        content, _ = fetch_with_curl(sitemap_url)
         
         if not content:
             print(f"DEBUG: Failed to fetch {sitemap_url} (curl returned empty)")
@@ -1271,8 +1283,8 @@ def scrape_page_details(url):
         start_time = time.time()
         
         # Use curl to bypass TLS fingerprinting
-        content = fetch_with_curl(url)
-        data['load_time_ms'] = int((time.time() - start_time) * 1000)
+        content, latency = fetch_with_curl(url)
+        data['load_time_ms'] = int(latency * 1000)
         
         if content:
             data['status_code'] = 200 # Assume 200 if curl returns content
