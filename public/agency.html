@@ -1591,9 +1591,9 @@
             if (!currentProject) return;
 
             const btn = document.getElementById('performAuditBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = `<i class="lucide-loader animate-spin"></i> Auditing ${currentProject.domain}...`;
-            btn.disabled = true;
+            // Show global loading overlay
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingOverlay').classList.add('flex');
 
             try {
                 const res = await fetch(`${API_BASE}/run-project-setup`, {
@@ -1618,13 +1618,11 @@
                 }
             } catch (e) {
                 console.error('Error running audit:', e);
-                // Show error in button temporarily
-                btn.innerHTML = `<span class="text-red-400">Error (Retry)</span>`;
+                // Optional: Show a toast or error message on the overlay if we had one
             } finally {
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }, 2000);
+                // Hide global loading overlay
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                document.getElementById('loadingOverlay').classList.remove('flex');
             }
         }
 
