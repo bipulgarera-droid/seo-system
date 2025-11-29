@@ -233,7 +233,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         let currentProjectId = null;
-        const API_BASE = window.location.port === '8000' ? 'http://localhost:3000' : '';
+        const API_BASE = ''; // Use relative path for same-origin API calls
 
         // Load projects on page load
         async function loadProjects() {
@@ -342,9 +342,17 @@
                     <span class="text-sm text-slate-400">${keywordDisplay}</span>
                 </td>
                 <td class="px-6 py-4 text-right">
-                    ${page.status === 'COMPLETED'
-                    ? `<button onclick="viewStrategy('${page.id}')" class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg transition-colors">View Strategy</button>`
-                    : `<button onclick='runAudit("${page.id}", this)' class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors">Run Audit</button>`
+                    ${page.page_type === 'product'
+                    ? `<div class="relative inline-block text-left">
+                            <select data-page-id="${page.id}" class="product-action-select px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer">
+                                <option value="">Product Actions...</option>
+                                <option value="generate_mofu">Generate MoFu</option>
+                                <option value="generate_tofu">Generate ToFu</option>
+                            </select>
+                           </div>`
+                    : page.status === 'COMPLETED'
+                        ? `<button onclick="viewStrategy('${page.id}')" class="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-medium rounded-lg transition-colors">View Strategy</button>`
+                        : `<button onclick='runAudit("${page.id}", this)' class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors">Run Audit</button>`
                 }
                 </td>
             `;
@@ -418,6 +426,71 @@
                 alert('Failed to run audit: ' + e.message);
                 btnElement.disabled = false;
                 btnElement.innerHTML = 'Run Audit';
+            }
+        }
+
+        // IMMEDIATE LOAD CHECK
+        console.log('Dashboard script loaded v2');
+        // alert('Dashboard script updated! If you see this, the file is new.');
+
+        // GLOBAL ERROR HANDLER
+        window.onerror = function (msg, url, line, col, error) {
+            console.error("Script Error:", msg, line);
+            // alert("Script Error: " + msg);
+            return false;
+        };
+
+        // DELEGATED EVENT LISTENER for dynamic elements
+        document.addEventListener('change', function (e) {
+            if (e.target && e.target.classList.contains('product-action-select')) {
+                handleProductAction(e.target.dataset.pageId, e.target);
+            }
+        });
+
+        async function handleProductAction(pageId, selectElement) {
+            const action = selectElement.value;
+            console.log('handleProductAction called:', { pageId, action });
+
+            if (!action) return;
+
+            // Force a redraw/alert to prove execution
+            // alert(`Action triggered: ${action} for page ${pageId}`);
+
+            const confirmed = confirm(`${action === 'generate_mofu' ? 'Generate MoFu topics' : 'Generate ToFu topics'} for this product?`);
+            if (!confirmed) {
+                selectElement.value = '';
+                return;
+            }
+
+            console.log('Sending API request...');
+            try {
+                const res = await fetch(`${API_BASE}/api/batch-update-pages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        page_ids: [pageId],
+                        action: action
+                    })
+                });
+
+                const data = await res.json();
+                console.log('API Response:', data);
+
+                if (res.ok) {
+                    alert(`Success! ${action === 'generate_mofu' ? 'MoFu' : 'ToFu'} topics generated. Refresh to see them in the table.`);
+                    if (currentProjectId) {
+                        const project = { id: currentProjectId };
+                        selectProject(project);
+                    }
+                } else {
+                    console.error('API Error:', data);
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                console.error('Product action error:', e);
+                alert('Failed to execute action: ' + e.message);
+            } finally {
+                selectElement.value = '';
             }
         }
 

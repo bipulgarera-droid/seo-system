@@ -38,6 +38,11 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
+        html {
+            font-size: 13px;
+            /* Scale down UI to ~80% */
+        }
+
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
             background-color: #0B0F19;
@@ -189,8 +194,15 @@
             </div>
         </div>
 
-        <!-- Right Actions -->
+        <!-- Right Side Actions -->
         <div class="flex items-center gap-3">
+            <button onclick="showLogs()"
+                class="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded text-xs font-medium transition-colors border border-gray-700">
+                <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
+                Debug Logs
+            </button>
+
+            <!-- Project Selector -->
             <div class="relative" id="projectDropdownContainer">
                 <button onclick="toggleProjectDropdown()" id="projectDropdownBtn"
                     class="bg-gray-800 border border-gray-700 text-xs rounded-lg hover:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between px-3 py-2 text-white w-56 transition-all">
@@ -221,15 +233,44 @@
             <div id="sidebarContent" class="p-2 space-y-1"></div>
         </aside>
 
-        <!-- Content Area -->
-        <main class="flex-1 bg-gray-950 relative overflow-y-auto">
-
-            <!-- Loading Overlay -->
-            <div id="loadingOverlay"
-                class="absolute inset-0 bg-gray-950/80 backdrop-blur-sm z-50 hidden items-center justify-center flex-col">
-                <i data-lucide="loader-2" class="w-8 h-8 text-blue-500 animate-spin mb-2"></i>
-                <span class="text-sm text-gray-400">Processing...</span>
+        <!-- Debug Panel -->
+        <div id="debugPanel"
+            class="hidden fixed bottom-4 right-4 bg-black/90 border border-red-500 p-4 rounded-lg shadow-2xl z-50 text-xs font-mono text-green-400 max-w-sm">
+            <div class="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
+                <h3 class="font-bold text-white">Debug Info</h3>
+                <button onclick="this.parentElement.parentElement.classList.add('hidden')"
+                    class="text-gray-500 hover:text-white">x</button>
             </div>
+            <div id="debugContent">Waiting for data...</div>
+        </div>
+
+        <!-- Log Viewer Modal -->
+        <div id="logModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[60]">
+            <div
+                class="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl">
+                <div class="flex justify-between items-center p-4 border-b border-gray-800">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i data-lucide="terminal" class="w-5 h-5 text-blue-400"></i> Server Logs
+                    </h3>
+                    <div class="flex gap-2">
+                        <button onclick="fetchLogs()"
+                            class="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white" title="Refresh">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="document.getElementById('logModal').classList.add('hidden')"
+                            class="p-2 hover:bg-gray-800 rounded text-gray-400 hover:text-white">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-auto p-4 bg-black font-mono text-xs text-green-400" id="logContent">
+                    Loading logs...
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 bg-gray-950 relative overflow-y-auto">
 
             <!-- Views -->
             <div id="view-container" class="p-6">
@@ -271,7 +312,25 @@
                 <!-- 2. Tech Audit View -->
                 <div id="view-tech-audit" class="view-section hidden">
                     <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-lg font-semibold text-white">Technical Audit</h2>
+                        <h2 class="text-lg font-semibold text-white">
+                            Technical Audit <span id="techAuditCount"
+                                class="text-gray-500 text-sm font-normal ml-2"></span>
+                        </h2>
+                        <button id="performAuditBtn" onclick="runTechAudit()"
+                            class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2">
+                            <i data-lucide="play" class="w-3 h-3"></i> Perform Audit (5 Pages)
+                        </button>
+                    </div>
+                    <div class="glass rounded-xl overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                                <tr>
+                                    <!-- Headers injected by JS -->
+                                </tr>
+                            </thead>
+                            <tbody id="techAuditTable" class="divide-y divide-gray-800 text-sm text-gray-300">
+                                <!-- Rows -->
+                            </tbody>
                         </table>
                     </div>
                 </div>
@@ -279,8 +338,12 @@
 
             <!-- 3. Classification View -->
             <div id="view-classification" class="view-section hidden">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-white">URL Classification</h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="classificationHeader" class="text-lg font-semibold text-white">URL Classification</h2>
+                    <button onclick="autoClassifyUrls()"
+                        class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-2">
+                        <i data-lucide="wand-2" class="w-3 h-3"></i> Auto Classify (50 pages)
+                    </button>
                 </div>
                 <div class="glass rounded-xl overflow-x-auto">
                     <table class="w-full text-left border-collapse">
@@ -472,6 +535,14 @@
                             <option value="US">United States</option>
                             <option value="UK">United Kingdom</option>
                             <option value="CA">Canada</option>
+                            <option value="AU">Australia</option>
+                            <option value="IN">India</option>
+                            <option value="DE">Germany</option>
+                            <option value="FR">France</option>
+                            <option value="BR">Brazil</option>
+                            <option value="JP">Japan</option>
+                            <option value="SG">Singapore</option>
+                            <option value="AE">UAE</option>
                         </select>
                     </div>
                 </div>
@@ -522,16 +593,63 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[200] flex-col gap-4">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <span class="text-white font-medium animate-pulse">Processing...</span>
+    </div>
+
     <script>
         const API_BASE = '/api';
         let currentProject = null;
         let projectPages = [];
         let allProjects = [];
 
+        // Global Helper for safe string escaping
+        function safeStr(str) {
+            if (!str) return '';
+            return str.replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '&quot;')
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '');
+        }
+
+        // GLOBAL ERROR HANDLER
+        window.onerror = function (msg, url, line, col, error) {
+            console.error("Script Error:", msg, line);
+            alert("Script Error: " + msg + " at line " + line);
+            return false;
+        };
+
+        // DELEGATED EVENT LISTENER REMOVED - Using inline onchange
+        // document.addEventListener('change', function (e) { ... });
+
         // Helper function to remove markdown asterisks
         function cleanAsterisks(text) {
             if (!text) return text;
             return text.replace(/\*\*/g, '').replace(/\*/g, '');
+        }
+
+        // --- Log Viewer ---
+        async function fetchLogs() {
+            const content = document.getElementById('logContent');
+            content.innerHTML = 'Loading...';
+            try {
+                const res = await fetch(`${API_BASE}/get-debug-log`);
+                const data = await res.json();
+                content.innerHTML = data.logs.map(line => `<div>${line}</div>`).join('');
+                content.scrollTop = content.scrollHeight; // Auto-scroll to bottom
+            } catch (e) {
+                content.innerHTML = `<div class="text-red-500">Error fetching logs: ${e.message}</div>`;
+            }
+        }
+
+        function showLogs() {
+            document.getElementById('logModal').classList.remove('hidden');
+            document.getElementById('logModal').classList.add('flex');
+            fetchLogs();
         }
 
         // --- Init ---
@@ -556,7 +674,7 @@
             if (tabId === 'projects') renderProjectsTable();
             else if (currentProject) {
                 if (tabId === 'tech-audit') renderTechAudit();
-                if (tabId === 'classification') renderClassification();
+                if (tabId === 'classification') filterClassification(currentClassificationFilter || 'all');
                 if (tabId === 'product-pillars') renderProductPillars();
                 if (tabId === 'category-pages') renderCategoryPages();
                 if (tabId === 'mofu') renderMoFu();
@@ -631,9 +749,17 @@
         }
 
         function selectProject(id, domain) {
-            document.getElementById('selectedProjectLabel').textContent = domain;
-            document.getElementById('projectDropdownMenu').classList.add('hidden');
-            loadProject(id);
+            try {
+                const label = document.getElementById('selectedProjectLabel');
+                if (label) label.textContent = domain;
+
+                const menu = document.getElementById('projectDropdownMenu');
+                if (menu) menu.classList.add('hidden');
+
+                loadProject(id);
+            } catch (e) {
+                console.error("Error in selectProject: " + e.message);
+            }
         }
 
         // Close dropdown when clicking outside
@@ -673,9 +799,13 @@
         }
 
         async function loadProject(id) {
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
             try {
+                const overlay = document.getElementById('loadingOverlay');
+                if (overlay) {
+                    overlay.classList.remove('hidden');
+                    overlay.classList.add('flex');
+                }
+
                 // Ensure projects are loaded
                 if (allProjects.length === 0) {
                     await loadProjectsList();
@@ -685,7 +815,7 @@
                 currentProject = allProjects.find(p => p.id === id);
 
                 if (!currentProject) {
-                    alert("Project not found. Please refresh the page.");
+                    console.error("Project not found. Please refresh the page.");
                     return;
                 }
 
@@ -697,12 +827,9 @@
                 const data = await res.json();
                 projectPages = data.pages || [];
 
-                // DEBUG: Remove later
                 console.log(`Loaded ${projectPages.length} pages for project ${id}`);
                 if (projectPages.length === 0) {
-                    alert(`Warning: 0 pages loaded for project ${id}. Check database.`);
-                } else {
-                    // alert(`Loaded ${projectPages.length} pages.`);
+                    console.warn(`Warning: 0 pages loaded for project ${id}. Check database.`);
                 }
 
                 // If we are on projects tab, just update table. If on others, render view.
@@ -711,10 +838,41 @@
                 } else {
                     switchMainTab(document.querySelector('.top-nav-item.active').id.replace('tab-', ''));
                 }
-            } catch (e) { alert(e); }
-            finally {
+            } catch (e) {
+                console.error(e);
+                alert("Error loading project: " + e.message);
+            } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
+
+                // DEBUG: Update Panel
+                const debugPanel = document.getElementById('debugPanel');
+                const debugContent = document.getElementById('debugContent');
+                if (debugPanel && debugContent) {
+                    debugPanel.classList.remove('hidden');
+                    if (currentProject) {
+                        const types = {};
+                        const stages = {};
+                        projectPages.forEach(p => {
+                            const t = p.page_type || 'null';
+                            types[t] = (types[t] || 0) + 1;
+
+                            const s = p.funnel_stage || 'null';
+                            stages[s] = (stages[s] || 0) + 1;
+                        });
+
+                        debugContent.innerHTML = `
+                            <strong>Project:</strong> ${currentProject.domain}<br>
+                            <strong>Total Pages:</strong> ${projectPages.length}<br>
+                            <strong>Types:</strong><br>
+                            <pre>${JSON.stringify(types, null, 2)}</pre>
+                            <strong>Stages:</strong><br>
+                            <pre>${JSON.stringify(stages, null, 2)}</pre>
+                        `;
+                    } else {
+                        debugContent.innerHTML = "No project loaded.";
+                    }
+                }
             }
         }
 
@@ -732,8 +890,17 @@
 
                 tbody.innerHTML += `
                     <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50 align-top">
-                        <td class="px-6 py-4 font-medium text-white whitespace-nowrap">${p.project_name}</td>
-                        <td class="px-6 py-4 text-blue-400 whitespace-nowrap">${p.domain}</td>
+                        <td class="px-6 py-4 font-medium text-white whitespace-nowrap">
+                            <a href="#" onclick="event.preventDefault(); selectProject('${p.id}', '${p.domain}')" class="hover:text-blue-400 hover:underline flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                ${p.project_name}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4 text-blue-400 whitespace-nowrap">
+                            <a href="#" onclick="event.preventDefault(); selectProject('${p.id}', '${p.domain}')" class="hover:underline">
+                                ${p.domain}
+                            </a>
+                        </td>
                         <td class="px-6 py-4 text-gray-400 whitespace-nowrap">${p.language || 'English'}</td>
                         <td class="px-6 py-4 text-gray-400 whitespace-nowrap">${p.location || 'US'}</td>
                         <td class="px-6 py-4 whitespace-nowrap"><span class="bg-gray-800 px-2 py-1 rounded text-xs">${p.focus || 'Product'}</span></td>
@@ -744,32 +911,34 @@
                         ? `
                                 <div class="flex flex-col items-center gap-1">
                                     <span class="text-green-500 font-medium text-xs">Done (${p.page_count})</span>
-                                    <button onclick="runScrape('${p.id}', ${p.page_count})" class="text-xs text-blue-400 hover:text-blue-300 hover:underline">
+                                    <button onclick="event.stopPropagation(); runScrape('${p.id}', ${p.page_count})" class="text-xs text-blue-400 hover:text-blue-300 hover:underline">
                                         Scrape More (+200)
                                     </button>
                                 </div>
                                 `
                         : `
-                                <button onclick="runScrape('${p.id}', 0)" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                                <button onclick="event.stopPropagation(); runScrape('${p.id}', 0)" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
                                     Start
                                 </button>
                                 `
                     }
                         </td>
                         
-                        <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white min-w-[300px] max-w-[500px] whitespace-normal leading-relaxed" onclick="showOverview('${p.id}')">
-                            <div class="mb-2"><span class="text-gray-500 font-semibold">Overview:</span> ${overview}</div>
-                            <div class="mb-2"><span class="text-gray-500 font-semibold">ICP:</span> ${p.ideal_customer_profile ? p.ideal_customer_profile.substring(0, 100) + '...' : '<span class="text-gray-600 italic">Not generated</span>'}</div>
-                            <div><span class="text-gray-500 font-semibold">Strategy:</span> ${strategy}</div>
-                        </td>
-
                         <!-- GENERATE COLUMN -->
-                        <td class="px-6 py-4 text-center whitespace-nowrap">
-                            <div class="flex items-center justify-center gap-2">
-                                <button onclick="runGenerate('${p.id}')" class="${p.business_summary ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-500/20'} text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200">
-                                    ${p.business_summary ? 'Regenerate' : 'Start'}
+                        <td class="px-6 py-4 whitespace-nowrap">
+                           <div class="flex flex-col gap-2 max-w-md">
+                                <div class="text-xs text-gray-400 line-clamp-2 cursor-pointer hover:text-white" onclick="event.stopPropagation(); showOverview('${p.id}')" title="Click to view full profile">
+                                    ${overview}
+                                </div>
+                           </div>
+                        </td>
+                        
+                         <td class="px-6 py-4 text-right whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-2">
+                                <button onclick="event.stopPropagation(); runGenerate('${p.id}')" class="bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border border-purple-500/30">
+                                    Regenerate
                                 </button>
-                                <button onclick="deleteProject('${p.id}', '${p.project_name || p.domain}')" class="p-1.5 hover:bg-red-500/20 rounded text-gray-500 hover:text-red-400 transition-colors" title="Delete Project">
+                                <button onclick="event.stopPropagation(); deleteProject('${p.id}', '${p.project_name || p.domain}')" class="p-1.5 hover:bg-red-500/20 rounded text-gray-500 hover:text-red-400 transition-colors" title="Delete Project">
                                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 </button>
                             </div>
@@ -886,16 +1055,67 @@
             }
         }
 
-        async function runScrape(projectId, currentCount) {
+        async function autoClassifyUrls() {
+            if (!currentProject) return;
+            if (!confirm("Auto-classify unclassified URLs based on common patterns?")) return;
+
             document.getElementById('loadingOverlay').classList.remove('hidden');
             document.getElementById('loadingOverlay').classList.add('flex');
 
-            // If currentCount is 0, we scrape 200.
-            // If currentCount is 200, we want to scrape 200 MORE, so max_pages should be 400?
-            // The backend logic is `crawl_sitemap(..., max_pages)`.
-            // And `crawl_sitemap` fetches until `len(pages) < max_pages`.
-            // So if we have 200 pages, and we want 200 more, we should pass max_pages = 400.
-            const maxPages = currentCount + 200;
+            try {
+                const res = await fetch(`${API_BASE}/auto-classify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: currentProject.id })
+                });
+                const data = await res.json();
+                alert(data.message);
+                loadProject(currentProject.id);
+            } catch (e) {
+                console.error(e);
+                alert("Auto-classification failed");
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                document.getElementById('loadingOverlay').classList.remove('flex');
+            }
+        }
+
+        async function runTechAudit() {
+            if (!currentProject) return;
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingOverlay').classList.add('flex');
+
+            try {
+                const res = await fetch(`${API_BASE}/run-project-setup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: currentProject.id,
+                        do_audit: false,
+                        do_tech_audit: true, // Trigger the real audit
+                        do_profile: false
+                    })
+                });
+                const data = await res.json();
+                alert(data.message || "Audit complete");
+                loadProject(currentProject.id); // Refresh data
+            } catch (e) {
+                console.error(e);
+                alert("Audit failed");
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                document.getElementById('loadingOverlay').classList.remove('flex');
+            }
+        }
+
+        async function runScrape(projectId, currentCount, limit = 200) {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingOverlay').classList.add('flex');
+
+            // If limit is provided, use it. Otherwise default to 200.
+            // If currentCount is 0, we scrape limit.
+            // If currentCount is > 0, we want to scrape limit MORE.
+            const maxPages = currentCount + limit;
 
             try {
                 const res = await fetch(`${API_BASE}/run-project-setup`, {
@@ -1015,6 +1235,19 @@
 
         // --- View 2: Tech Audit ---
         function renderTechAudit() {
+            // Update Count
+            const countSpan = document.getElementById('techAuditCount');
+            if (countSpan && projectPages) {
+                countSpan.innerText = `(${projectPages.length} URLs)`;
+            }
+
+            // Update Button Text with Domain
+            const btn = document.getElementById('performAuditBtn');
+            if (btn && currentProject) {
+                btn.innerHTML = `<i data-lucide="play" class="w-3 h-3"></i> Perform Audit (5 Pages) for ${currentProject.domain}`;
+                lucide.createIcons();
+            }
+
             // Default to URL Inspection
             switchTechAuditSubTab('url-inspection');
         }
@@ -1102,7 +1335,7 @@
                         <td class="px-6 py-4 whitespace-nowrap text-gray-400">${data.click_depth || '-'}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-gray-400" title="${data.canonical}">${data.canonical || '-'}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-gray-400" title="${data.title}">${data.title || '-'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-gray-400 text-xs"><span class="bg-gray-800 px-2 py-1 rounded">${currentProject.project_name}</span></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-400 text-xs"><span class="bg-gray-800 px-2 py-1 rounded">${currentProject?.project_name || 'Unknown'}</span></td>
                     </tr>
                 `;
             }).join('');
@@ -1348,6 +1581,35 @@
             }
         }
 
+        async function runTechAudit() {
+            if (!currentProject) return;
+
+            const btn = document.getElementById('performAuditBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="lucide-loader animate-spin"></i> Auditing ${currentProject.domain}...`;
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/run-project-setup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: currentProject.id,
+                        do_tech_audit: true,
+                        max_pages: 5 // Reduced to 5 for debugging
+                    })
+                });
+                const data = await res.json();
+                console.log(`Audit complete! Updated ${data.pages_found || 0} pages.`);
+                await loadProject(currentProject.id);
+            } catch (e) {
+                alert('Error running audit: ' + e);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
         async function runBatchAudit() {
             if (projectPages.length === 0) {
                 alert("No pages found for this project. Please ensure the project was set up correctly and URLs were discovered.");
@@ -1409,7 +1671,8 @@
             renderClassification();
 
             // Update active state in sidebar
-            const buttons = document.querySelectorAll('#sidebar-content button');
+            // Update active state in sidebar
+            const buttons = document.querySelectorAll('#sidebarContent button');
             buttons.forEach(btn => {
                 if (btn.textContent.includes(filter === 'all' ? 'All' : filter)) {
                     btn.classList.add('active', 'bg-gray-800', 'text-white');
@@ -1419,6 +1682,15 @@
                     btn.classList.add('text-gray-300');
                 }
             });
+
+            // Update Header Title
+            const header = document.getElementById('classificationHeader');
+            if (header) {
+                if (filter === 'all') header.textContent = 'URL Classification';
+                else if (filter === 'Product') header.textContent = 'Product Pages';
+                else if (filter === 'Category') header.textContent = 'Category Pages';
+                else header.textContent = filter + ' Pages';
+            }
         }
 
         function renderClassification() {
@@ -1435,7 +1707,11 @@
             let pages = projectPages;
 
             if (currentClassificationFilter !== 'all') {
-                pages = pages.filter(pg => pg.funnel_stage === currentClassificationFilter);
+                if (currentClassificationFilter === 'Unclassified') {
+                    pages = pages.filter(pg => !pg.page_type || pg.page_type === 'Unclassified' || pg.page_type === '');
+                } else {
+                    pages = pages.filter(pg => (pg.page_type || '').toLowerCase() === currentClassificationFilter.toLowerCase());
+                }
             }
 
             if (pages.length === 0) {
@@ -1444,10 +1720,10 @@
             }
 
             const rows = pages.map(pg => {
-                const stage = pg.funnel_stage || 'Unclassified';
+                const stage = pg.page_type || 'Unclassified';
 
                 // Simplified Dropdown Options
-                const options = ['Product', 'Category', 'Other', 'Unclassified'];
+                const options = ['Product', 'Category', 'Unclassified'];
 
                 let optionsHtml = options.map(opt =>
                     `<option value="${opt}" ${stage === opt ? 'selected' : ''}>${opt}</option>`
@@ -1461,7 +1737,7 @@
                                 <i data-lucide="external-link" class="w-3 h-3 text-gray-600"></i>
                             </a>
                         </td>
-                        <td class="px-6 py-4 text-gray-400">${pg.title || '-'}</td>
+                        <td class="px-6 py-4 text-gray-400">${pg.page_type || '-'}</td>
                         <td class="px-6 py-4">
                             <select onchange="handleClassificationChange('${pg.id}', this.value)" 
                                 class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-40 focus:ring-2 focus:ring-blue-500">
@@ -1492,6 +1768,7 @@
                     const page = projectPages.find(p => p.id === pageId);
                     if (page) {
                         page.funnel_stage = newType;
+                        page.page_type = newType; // Also update page_type for Product tab filtering
                         // Update counts
                         if (currentProject) {
                             // Simple increment/decrement logic could be complex due to previous state
@@ -1540,37 +1817,43 @@
 
         // --- View 4: Product / Pillars ---
         function renderProductPillars() {
-            const tbody = document.getElementById('productPillarsTable');
-            tbody.innerHTML = '';
+            try {
+                const tbody = document.getElementById('productPillarsTable');
+                tbody.innerHTML = '';
 
-            // Only show pages classified as 'Product'
-            const products = projectPages.filter(p => p.page_type === 'Product');
+                // Only show pages classified as 'Product'
+                // Only show pages classified as 'Product' (Case Insensitive)
+                const products = projectPages.filter(p => (p.page_type || '').toLowerCase() === 'product');
 
-            // Helper for safe string escaping
-            function safeStr(str) {
-                if (!str) return '';
-                return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            }
+                if (products.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No Product pages found. Classify pages in "URL Classification" tab first.</td></tr>';
+                    return;
+                }
 
-            if (products.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-500">No Product pages found. Classify pages in "URL Classification" tab first.</td></tr>';
-                return;
-            }
+                const rows = products.map(p => {
+                    const data = p.tech_audit_data || {};
+                    const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
+                    const existingPreview = p.tech_audit_data?.meta_description ? p.tech_audit_data.meta_description.substring(0, 50) + '...' : '';
 
-            const rows = products.map(p => {
-                const data = p.tech_audit_data || {};
-                const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
-                const existingPreview = p.tech_audit_data?.meta_description ? p.tech_audit_data.meta_description.substring(0, 50) + '...' : '';
+                    // FIX: Always use slug if title is bad (Pending Scan, Untitled, etc.)
+                    let displayTitle = data.title || '';
+                    const isBadTitle = !displayTitle || displayTitle.toLowerCase().includes('pending') || displayTitle.toLowerCase().includes('untitled') || displayTitle.toLowerCase().includes('scan');
 
-                return `
+                    if (isBadTitle) {
+                        // Extract from URL slug
+                        const slug = p.url.split('/').filter(s => s).pop() || 'product';
+                        displayTitle = slug.replace(/-/g, ' ').replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                    }
+
+                    return `
                     <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
-                        <td class="px-6 py-4 truncate max-w-xs text-sm font-medium text-white" title="${data.title}">${data.title || 'Untitled Product'}</td>
+                        <td class="px-6 py-4 truncate max-w-xs text-sm font-medium text-white capitalize" title="${displayTitle}">${displayTitle}</td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-blue-400" title="${p.url}"><a href="${p.url}" target="_blank" class="hover:underline">${p.url}</a></td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400 cursor-pointer hover:text-white" onclick="showModalContent('${p.id}', 'existing')">
-                            ${existingPreview || 'View Content'}
+                            <span class="px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-xs">View Content</span>
                         </td>
                         <td class="px-6 py-4">
-                            <select onchange="handleProductAction('${p.id}', this.value)" class="bg-gray-800 border border-gray-700 text-xs rounded px-3 py-1.5 text-white min-w-[150px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer">
+                            <select onchange="handleProductAction('${p.id}', this.value, this)" class="product-action-select bg-gray-800 border border-gray-700 text-xs rounded px-3 py-1.5 text-white min-w-[150px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer">
                                 <option value="Idle" ${p.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
                                 <option value="Scrape Content" ${p.product_action === 'Scrape Content' ? 'selected' : ''}>Scrape Content</option>
                                 <option value="Generate Content" ${p.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
@@ -1578,17 +1861,21 @@
                             </select>
                         </td>
                         <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white" onclick="showModalContent('${p.id}', 'new')">
-                            ${contentPreview || '<span class="text-gray-600">Generate First</span>'}
+                            ${contentPreview ? '<span class="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-green-400 text-xs whitespace-nowrap">View</span>' : '<span class="text-gray-600">Generate First</span>'}
                         </td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400 cursor-pointer hover:text-white hover:underline" onclick="showTextModal('Meta Description', '${safeStr(data.meta_description)}')">
                             ${data.meta_description || '-'}
                         </td>
-                        <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400" title="${data.title}">${data.title || '-'}</td>
+                        <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400" title="${displayTitle}">${displayTitle}</td>
                     </tr>
                 `;
-            }).join('');
+                }).join('');
 
-            tbody.innerHTML = rows;
+                tbody.innerHTML = rows;
+            } catch (e) {
+                console.error("Render Error:", e);
+                // alert("Error rendering Product Pillars: " + e.message);
+            }
         }
 
         function showResearchData(pageId) {
@@ -1623,11 +1910,13 @@
             }
 
             // Format research data as readable HTML
+            const briefContent = researchData.brief || researchData.perplexity_research || 'No brief available';
+
             const formattedResearch = `
                 <div class="space-y-6">
                     <div>
                         <h4 class="font-bold text-lg mb-2">Research Brief</h4>
-                        <div class="text-gray-300 text-sm leading-relaxed">${renderMarkdown(researchData.brief || 'No brief available')}</div>
+                        <div class="text-gray-300 text-sm leading-relaxed">${renderMarkdown(briefContent)}</div>
                     </div>
                     
                     ${researchData.search_intent ? `
@@ -1750,26 +2039,55 @@
             document.getElementById('contentModal').classList.add('flex');
         }
 
-        async function handleProductAction(pageId, action) {
+        async function handleProductAction(pageId, action, selectElement) {
+            alert(`DEBUG: handleProductAction called for ${pageId} with action ${action}`); // FORCE ALERT
             if (action === 'Idle') return;
 
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
-
             try {
+                const overlay = document.getElementById('loadingOverlay');
+                if (!overlay) {
+                    console.error("CRITICAL ERROR: loadingOverlay element not found!");
+                    return;
+                }
+
+                const overlayText = overlay.querySelector('span');
+                if (overlayText) {
+                    overlayText.textContent = `Processing ${action}...`;
+                } else {
+                    console.warn("Overlay span not found, skipping text update");
+                }
+
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+
                 const apiAction = action === 'Scrape Content' ? 'scrape_content' :
                     action === 'Generate Content' ? 'generate_content' : 'generate_mofu';
 
-                await fetch(`${API_BASE}/batch-update-pages`, {
+                const res = await fetch(`${API_BASE}/batch-update-pages`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ page_ids: [pageId], action: apiAction })
                 });
+
+                alert(`DEBUG: Fetch complete. Status: ${res.status}`); // FORCE ALERT
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    alert(`DEBUG: Server Error: ${data.error}`); // FORCE ALERT
+                    throw new Error(data.error || 'Unknown error');
+                }
+
+                alert(`Success! ${action} started. Check console for details.`);
+                console.log(`Success! ${action} started. Response:`, data);
                 await loadProject(currentProject.id);
-            } catch (e) { alert(e); }
-            finally {
+            } catch (e) {
+                console.error(e);
+                console.error('Error: ' + e.message);
+            } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
+                if (selectElement) selectElement.value = 'Idle'; // Reset
             }
         }
 
@@ -1785,17 +2103,27 @@
                 return;
             }
 
-            categories.forEach(p => {
+            const rows = categories.map(p => {
                 const data = p.tech_audit_data || {};
                 const contentPreview = p.content ? p.content.substring(0, 50) + '...' : '';
                 const existingPreview = p.tech_audit_data?.body_content ? p.tech_audit_data.body_content.substring(0, 50) + '...' : '';
 
-                tbody.innerHTML += `
+                // FIX: Always use slug if title is bad (Pending Scan, Untitled, etc.)
+                let displayTitle = data.title || '';
+                const isBadTitle = !displayTitle || displayTitle.toLowerCase().includes('pending') || displayTitle.toLowerCase().includes('untitled') || displayTitle.toLowerCase().includes('scan');
+
+                if (isBadTitle) {
+                    // Extract from URL slug
+                    const slug = p.url.split('/').filter(s => s).pop() || 'category';
+                    displayTitle = slug.replace(/-/g, ' ').replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                }
+
+                return `
                     <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
-                        <td class="px-6 py-4 truncate max-w-xs text-sm font-medium text-white" title="${data.title}">${data.title || 'Untitled Category'}</td>
+                        <td class="px-6 py-4 truncate max-w-xs text-sm font-medium text-white capitalize" title="${displayTitle}">${displayTitle}</td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-blue-400" title="${p.url}"><a href="${p.url}" target="_blank" class="hover:underline">${p.url}</a></td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400 cursor-pointer hover:text-white" onclick="showModalContent('${p.id}', 'existing')">
-                            ${existingPreview || 'Scrape First'}
+                            <span class="px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-xs">View Content</span>
                         </td>
                         <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400" title="${data.meta_description}">${data.meta_description || '-'}</td>
                         <td class="px-6 py-4">
@@ -1806,12 +2134,14 @@
                             </select>
                         </td>
                         <td class="px-6 py-4 text-xs text-gray-400 cursor-pointer hover:text-white" onclick="showModalContent('${p.id}', 'new')">
-                            ${contentPreview || '<span class="text-gray-600">Generate First</span>'}
+                            ${contentPreview ? '<span class="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-green-400 text-xs whitespace-nowrap">View</span>' : '<span class="text-gray-600">Generate First</span>'}
                         </td>
-                        <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400" title="${data.title}">${data.title || '-'}</td>
+                        <td class="px-6 py-4 truncate max-w-xs text-xs text-gray-400" title="${displayTitle}">${displayTitle}</td>
                     </tr>
                 `;
-            });
+            }).join('');
+
+            tbody.innerHTML = rows;
         }
 
         async function handleCategoryAction(pageId, action) {
@@ -1823,6 +2153,7 @@
             try {
                 const apiAction = action === 'Scrape Content' ? 'scrape_content' : 'generate_content';
 
+                // Fix: API_BASE already includes /api
                 await fetch(`${API_BASE}/batch-update-pages`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1838,31 +2169,32 @@
 
         // --- View 5: MoFu ---
         function renderMoFu() {
-            const tbody = document.getElementById('mofuTable');
-            tbody.innerHTML = '';
+            try {
+                const tbody = document.getElementById('mofuTable');
+                tbody.innerHTML = '';
 
-            const topics = projectPages.filter(p => p.page_type === 'Topic' && p.funnel_stage === 'MoFu');
+                const topics = projectPages.filter(p => (p.page_type || '').toLowerCase() === 'topic' && (p.funnel_stage || '').toLowerCase() === 'mofu');
 
-            if (topics.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">No MoFu topics generated yet. Go to "Product / Pillars" and select "Generate MoFu".</td></tr>';
-                return;
-            }
+                if (topics.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">No MoFu topics generated yet. Go to "Product / Pillars" and select "Generate MoFu".</td></tr>';
+                    return;
+                }
 
-            // Group by Source Page
-            const grouped = {};
-            topics.forEach(t => {
-                const sourceId = t.source_page_id || 'unknown';
-                if (!grouped[sourceId]) grouped[sourceId] = [];
-                grouped[sourceId].push(t);
-            });
+                // Group by Source Page
+                const grouped = {};
+                topics.forEach(t => {
+                    const sourceId = t.source_page_id || 'unknown';
+                    if (!grouped[sourceId]) grouped[sourceId] = [];
+                    grouped[sourceId].push(t);
+                });
 
-            let htmlContent = '';
-            for (const [sourceId, groupTopics] of Object.entries(grouped)) {
-                const sourcePage = projectPages.find(p => p.id === sourceId);
-                const sourceTitle = sourcePage ? (sourcePage.tech_audit_data?.title || sourcePage.url) : 'Unknown Source';
+                let htmlContent = '';
+                for (const [sourceId, groupTopics] of Object.entries(grouped)) {
+                    const sourcePage = projectPages.find(p => p.id === sourceId);
+                    const sourceTitle = sourcePage ? (sourcePage.tech_audit_data?.title || sourcePage.url) : 'Unknown Source';
 
-                // Header Row for Product
-                htmlContent += `
+                    // Header Row for Product
+                    htmlContent += `
                     <tr class="bg-gray-800/50 border-b border-gray-800">
                         <td colspan="9" class="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <i data-lucide="folder" class="w-3 h-3 inline mr-2"></i> ${sourceTitle} <span class="ml-2 text-gray-600">(${groupTopics.length})</span>
@@ -1870,15 +2202,12 @@
                     </tr>
                 `;
 
-                // Topic Rows
-                htmlContent += groupTopics.map(t => {
-                    const data = t.tech_audit_data || {};
-                    const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
+                    // Topic Rows
+                    htmlContent += groupTopics.map(t => {
+                        const data = t.tech_audit_data || {};
+                        const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
 
-                    // Helper to escape quotes for onclick
-                    const safeStr = (str) => (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-                    return `
+                        return `
                         <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                             <td class="px-6 py-4 font-medium text-white text-sm pl-10 min-w-[350px]">
                                 <div class="flex items-center gap-2">
@@ -1895,6 +2224,7 @@
                             <td class="px-6 py-4">
                                 <select onchange="handleMoFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full">
                                     <option value="Idle" ${t.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
+                                    <option value="Conduct Research" ${t.product_action === 'Conduct Research' ? 'selected' : ''}>Conduct Research</option>
                                     <option value="Generate Content" ${t.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
                                     <option value="Generate ToFu" ${t.product_action === 'Generate ToFu' ? 'selected' : ''}>Generate ToFu</option>
                                     <option value="PushWebflow" ${t.product_action === 'PushWebflow' ? 'selected' : ''}>PushWebflow</option>
@@ -1915,10 +2245,14 @@
                             <td class="px-6 py-4 text-xs text-gray-400 truncate max-w-xs" title="${t.slug}">${t.slug || '-'}</td>
                         </tr>
                     `;
-                }).join('');
+                    }).join('');
+                }
+                tbody.innerHTML = htmlContent;
+                lucide.createIcons();
+            } catch (e) {
+                console.error("Render MoFu Error:", e);
+                // alert("Error rendering MoFu: " + e.message);
             }
-            tbody.innerHTML = htmlContent;
-            lucide.createIcons();
         }
 
         async function handleMoFuAction(pageId, action) {
@@ -1929,21 +2263,53 @@
                 return;
             }
 
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
+            const overlay = document.getElementById('loadingOverlay');
+            const overlayText = overlay.querySelector('span');
+            if (overlayText) {
+                if (action === 'Conduct Research') {
+                    overlayText.innerText = `Conducting Deep Research... This may take up to 2 minutes per topic.`;
+                } else {
+                    overlayText.innerText = `Processing ${action}...`;
+                }
+            }
+
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
 
             try {
                 const apiAction = action === 'Generate Content' ? 'generate_content' :
-                    action === 'Generate ToFu' ? 'generate_tofu' :
-                        action === 'Generate Sub-Silo' ? 'generate_sub_silo' : 'idle';
+                    action === 'Conduct Research' ? 'conduct_research' :
+                        action === 'Generate ToFu' ? 'generate_tofu' :
+                            action === 'Generate Sub-Silo' ? 'generate_sub_silo' : 'idle';
 
-                await fetch(`${API_BASE}/batch-update-pages`, {
+                console.log(`Sending MoFu Action: ${apiAction} to ${API_BASE}/batch-update-pages`);
+
+                // 5 Minute Timeout for Research
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+                const res = await fetch(`${API_BASE}/batch-update-pages`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_ids: [pageId], action: apiAction })
+                    body: JSON.stringify({ page_ids: [pageId], action: apiAction }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(`API Error: ${res.status} - ${err}`);
+                }
+
                 await loadProject(currentProject.id);
-            } catch (e) { alert(e); }
+            } catch (e) {
+                console.error(e);
+                if (e.name === 'AbortError') {
+                    alert("Action timed out. The research is likely still running in the background. Please refresh in a few minutes.");
+                } else {
+                    alert("Action failed: " + e.message);
+                }
+            }
             finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
@@ -1955,7 +2321,7 @@
             const tbody = document.getElementById('tofuTable');
             tbody.innerHTML = '';
 
-            const tofus = projectPages.filter(p => p.page_type === 'Topic' && p.funnel_stage === 'ToFu');
+            const tofus = projectPages.filter(p => (p.page_type || '').toLowerCase() === 'topic' && (p.funnel_stage || '').toLowerCase() === 'tofu');
 
             if (tofus.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">No ToFu topics generated yet. Go to "MoFu / Silo Topics" and select "Generate ToFu".</td></tr>';
@@ -1991,6 +2357,12 @@
 
                 // Level 1: Product Header
                 tbody.innerHTML += `
+                    <div class="mt-auto pt-4 border-t border-gray-800">
+                <button onclick="showLogs()" class="w-full flex items-center gap-3 px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors mb-2">
+                    <i data-lucide="terminal" class="w-5 h-5"></i>
+                    <span class="font-medium">Debug Logs</span>
+                </button>
+                <div class="flex items-center gap-3 px-3 py-2 text-gray-400">
                     <tr class="bg-gray-900 border-b border-gray-800">
                         <td colspan="9" class="px-6 py-3 text-sm font-bold text-white uppercase tracking-wider">
                             <i data-lucide="box" class="w-4 h-4 inline mr-2 text-blue-500"></i> ${productTitle}
@@ -2015,9 +2387,6 @@
                         const data = t.tech_audit_data || {};
                         const contentPreview = t.content ? t.content.substring(0, 30) + '...' : '';
 
-                        // Helper to escape quotes for onclick
-                        const safeStr = (str) => (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
                         tbody.innerHTML += `
                             <tr class="hover:bg-gray-900/50 transition-colors border-b border-gray-800/50">
                                 <td class="px-6 py-4 font-medium text-white text-sm pl-16 min-w-[350px]">
@@ -2035,6 +2404,7 @@
                                 <td class="px-6 py-4">
                                     <select onchange="handleToFuAction('${t.id}', this.value)" class="bg-gray-800 border-gray-700 text-xs rounded px-2 py-1 text-white w-full">
                                         <option value="Idle" ${t.product_action === 'Idle' ? 'selected' : ''}>Idle</option>
+                                        <option value="Conduct Research" ${t.product_action === 'Conduct Research' ? 'selected' : ''}>Conduct Research</option>
                                         <option value="Generate Content" ${t.product_action === 'Generate Content' ? 'selected' : ''}>Generate Content</option>
                                         <option value="PushWebflow" ${t.product_action === 'PushWebflow' ? 'selected' : ''}>PushWebflow</option>
                                     </select>
@@ -2068,17 +2438,51 @@
                 return;
             }
 
-            document.getElementById('loadingOverlay').classList.remove('hidden');
-            document.getElementById('loadingOverlay').classList.add('flex');
+            const overlay = document.getElementById('loadingOverlay');
+            const overlayText = overlay.querySelector('span');
+            if (overlayText) {
+                if (action === 'Conduct Research') {
+                    overlayText.innerText = `Conducting Deep Research... This may take up to 2 minutes per topic.`;
+                } else {
+                    overlayText.innerText = `Processing ${action}...`;
+                }
+            }
+
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
 
             try {
-                await fetch(`${API_BASE}/batch-update-pages`, {
+                const apiAction = action === 'Generate Content' ? 'generate_content' :
+                    action === 'Conduct Research' ? 'conduct_research' : 'idle';
+
+                console.log(`Sending ToFu Action: ${apiAction} to ${API_BASE}/batch-update-pages`);
+
+                // 5 Minute Timeout for Research
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000);
+
+                const res = await fetch(`${API_BASE}/batch-update-pages`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page_ids: [pageId], action: 'generate_content' }) // Reusing generate_content
+                    body: JSON.stringify({ page_ids: [pageId], action: apiAction }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(`API Error: ${res.status} - ${err}`);
+                }
+
                 await loadProject(currentProject.id);
-            } catch (e) { alert(e); }
+            } catch (e) {
+                console.error(e);
+                if (e.name === 'AbortError') {
+                    alert("Action timed out. The research is likely still running in the background. Please refresh in a few minutes.");
+                } else {
+                    alert("Action failed: " + e.message);
+                }
+            }
             finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
@@ -2169,6 +2573,29 @@
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
+
+                // DEBUG: Update Panel
+                const debugPanel = document.getElementById('debugPanel');
+                const debugContent = document.getElementById('debugContent');
+                if (debugPanel && debugContent) {
+                    debugPanel.classList.remove('hidden');
+                    if (currentProject) {
+                        const types = {};
+                        projectPages.forEach(p => {
+                            const t = p.page_type || 'null';
+                            types[t] = (types[t] || 0) + 1;
+                        });
+
+                        debugContent.innerHTML = `
+                            <strong>Project:</strong> ${currentProject.domain} (${currentProject.id})<br>
+                            <strong>Total Pages:</strong> ${projectPages.length}<br>
+                            <strong>Types:</strong><br>
+                            <pre>${JSON.stringify(types, null, 2)}</pre>
+                        `;
+                    } else {
+                        debugContent.innerHTML = "No project loaded.";
+                    }
+                }
             }
         }
 
