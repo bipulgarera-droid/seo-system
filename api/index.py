@@ -980,7 +980,11 @@ def get_pages():
         if not project_id:
             return jsonify({"error": "project_id is required"}), 400
         
-        response = supabase.table('pages').select('*').eq('project_id', project_id).order('id').execute()
+        # Optimize: Select only necessary columns for the list view
+        # We need tech_audit_data for the status/title, but we don't need the full body_content if it's huge.
+        # However, Supabase select doesn't support "exclude".
+        # Let's select explicit columns.
+        response = supabase.table('pages').select('id, project_id, url, page_type, created_at, tech_audit_data').eq('project_id', project_id).order('id').execute()
         
         import sys
         print(f"DEBUG: get_pages for {project_id} found {len(response.data) if response.data else 0} pages.", file=sys.stderr)

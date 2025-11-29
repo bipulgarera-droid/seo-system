@@ -912,7 +912,7 @@
                                 <div class="flex flex-col items-center gap-1">
                                     <span class="text-green-500 font-medium text-xs">Done (${p.page_count})</span>
                                     <button onclick="event.stopPropagation(); runScrape('${p.id}', ${p.page_count})" class="text-xs text-blue-400 hover:text-blue-300 hover:underline">
-                                        Scrape More (+200)
+                                        Scrape More (+1000)
                                     </button>
                                 </div>
                                 `
@@ -1108,7 +1108,7 @@
             }
         }
 
-        async function runScrape(projectId, currentCount, limit = 200) {
+        async function runScrape(projectId, currentCount, limit = 1000) {
             document.getElementById('loadingOverlay').classList.remove('hidden');
             document.getElementById('loadingOverlay').classList.add('flex');
 
