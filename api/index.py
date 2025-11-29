@@ -910,34 +910,16 @@ def get_projects():
             profiles_map = {}
         
         # Fetch all pages for counts (optimization)
-        try:
-            # Increase limit to avoid missing pages (default is usually 1000)
-            all_pages_res = supabase.table('pages').select('project_id, page_type').limit(100000).execute()
-            all_pages = all_pages_res.data if all_pages_res.data else []
-        except Exception as e:
-            print(f"Error fetching pages for counts: {e}")
-            all_pages = []
+        # OLD: Fetched all pages (slow for 100k+ pages)
+        # NEW: Fetch counts per project (O(N) where N is projects, not pages)
         
-        from collections import defaultdict
-        counts = defaultdict(int)
-        classified_counts = defaultdict(int)
-        
-        for page in all_pages:
-            pid = page.get('project_id')
-            if pid:
-                counts[pid] += 1
-                # Fix: Check for None and 'Unclassified'
-                pt = page.get('page_type')
-                if pt and pt.lower() != 'unclassified':
-                    classified_counts[pid] += 1
-
         # Merge and parse strategy plan
         final_projects = []
         for p in projects:
             try:
                 profile = profiles_map.get(p['id'], {})
                 
-                # Parse Strategy Plan from Business Summary if present (WORKAROUND)
+                # Parse Strategy Plan
                 summary = profile.get('business_summary') or ''
                 strategy_plan = ''
                 if '===STRATEGY_PLAN===' in summary:
@@ -948,6 +930,31 @@ def get_projects():
                             strategy_plan = parts[1].strip()
                     except:
                         pass
+                
+                # Efficient Counting via Supabase
+                # 1. Total Count
+                try:
+                    count_res = supabase.table('pages').select('id', count='exact', head=True).eq('project_id', p['id']).execute()
+                    page_count = count_res.count
+                except:
+                    page_count = 0
+                    
+                # 2. Classified Count (Not Unclassified)
+                # Note: Supabase 'neq' with NULLs can be tricky. We assume 'Unclassified' is the string.
+                # If page_type is NULL, it's also unclassified.
+                # So we want count where page_type IS NOT NULL AND page_type != 'Unclassified'
+                try:
+                    # We can't easily do complex OR logic in one query without RPC.
+                    # Simplified: Count where page_type is NOT 'Unclassified' (ignoring NULLs for now or assuming default is Unclassified)
+                    # Actually, let's just count where page_type is in ['Product', 'Category', 'Service', 'Article', 'Blog']
+                    # Or just subtract unclassified from total?
+                    # Let's try to get count of "Product" + "Category" + "Service" etc.
+                    # Simpler: Just use the total count for now to be fast, or do a specific query.
+                    # Let's do: count where page_type != 'Unclassified'
+                    class_res = supabase.table('pages').select('id', count='exact', head=True).eq('project_id', p['id']).neq('page_type', 'Unclassified').execute()
+                    classified_count = class_res.count
+                except:
+                    classified_count = 0
                 
                 # Construct the project object to return
                 project_obj = {
@@ -965,8 +972,8 @@ def get_projects():
                     "primary_products": profile.get('primary_products'),
                     "competitors": profile.get('competitors'),
                     "unique_selling_points": profile.get('unique_selling_points'),
-                    "page_count": counts.get(p['id'], 0),
-                    "classified_count": classified_counts.get(p['id'], 0)
+                    "page_count": page_count,
+                    "classified_count": classified_count
                 }
                 final_projects.append(project_obj)
             except Exception as e:

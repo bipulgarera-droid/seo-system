@@ -1048,7 +1048,7 @@
 
             } catch (e) {
                 console.error(e);
-                alert("Failed to start project setup");
+                console.error("Failed to start project setup");
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
@@ -1069,11 +1069,11 @@
                     body: JSON.stringify({ project_id: currentProject.id })
                 });
                 const data = await res.json();
-                alert(data.message);
+                console.log(data.message);
                 loadProject(currentProject.id);
             } catch (e) {
                 console.error(e);
-                alert("Auto-classification failed");
+                console.error("Auto-classification failed");
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
@@ -1101,7 +1101,7 @@
                 loadProject(currentProject.id); // Refresh data
             } catch (e) {
                 console.error(e);
-                alert("Audit failed");
+                console.error("Audit failed");
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
@@ -2545,12 +2545,12 @@
                 await loadProjectsList();
 
                 // Show success message
-                alert(`✓ Project "${domain}" created successfully! Select it from the dropdown above.`);
+                console.log(`✓ Project "${domain}" created successfully!`);
 
                 // Clear form
                 document.getElementById('newDomain').value = '';
             } catch (e) {
-                alert('Error creating project: ' + e.message);
+                console.error('Error creating project: ' + e.message);
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
@@ -2587,7 +2587,7 @@
                 alert('Project deleted successfully.');
             } catch (e) {
                 console.error(e);
-                alert('Error deleting project: ' + e.message);
+                console.error('Error deleting project: ' + e.message);
             } finally {
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 document.getElementById('loadingOverlay').classList.remove('flex');
