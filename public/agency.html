@@ -1596,7 +1596,7 @@
                     body: JSON.stringify({
                         project_id: currentProject.id,
                         do_tech_audit: true,
-                        max_pages: 20 // Increased to 20 (Safe for 60s timeout)
+                        max_pages: 10 // Reduced to 10 to avoid timeouts/rate-limits
                     })
                 });
                 const data = await res.json();

@@ -766,7 +766,6 @@ def fetch_sitemap_urls(sitemap_url, project_id, headers, max_urls):
         sitemap_tags = soup.find_all('sitemap')
         
         if sitemap_tags:
-            print(f"DEBUG: Found sitemap index with {len(sitemap_tags)} child sitemaps")
             # Recursively fetch ALL child sitemaps (removed limit of 5)
             for i, sitemap_tag in enumerate(sitemap_tags):
                 if len(pages) >= max_urls:
@@ -776,7 +775,16 @@ def fetch_sitemap_urls(sitemap_url, project_id, headers, max_urls):
                 if loc:
                     child_url = loc.text.strip()
                     print(f"DEBUG: Recursively fetching child sitemap {i+1}: {child_url}")
+                    
+                    # Rate Limit: Sleep 2 seconds between sitemaps to avoid 429/Blocking
+                    import time
+                    time.sleep(2)
+                    
                     child_pages = fetch_sitemap_urls(child_url, project_id, headers, max_urls - len(pages))
+                    
+                    if not child_pages:
+                        print(f"DEBUG: Warning - Child sitemap {child_url} returned 0 pages. Possible block?")
+                        
                     pages.extend(child_pages)
         else:
             # Regular sitemap with <url> tags
@@ -1251,6 +1259,9 @@ def scrape_page_details(url):
     
     try:
         start_time = time.time()
+        
+        # Rate Limit: Sleep 1 second before scraping to be polite
+        time.sleep(1)
         
         # Use curl to bypass TLS fingerprinting
         content = fetch_with_curl(url)
