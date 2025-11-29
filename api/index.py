@@ -1011,7 +1011,7 @@ def get_pages():
         # We need tech_audit_data for the status/title, but we don't need the full body_content if it's huge.
         # However, Supabase select doesn't support "exclude".
         # Let's select explicit columns.
-        response = supabase.table('pages').select('id, project_id, url, page_type, created_at, tech_audit_data').eq('project_id', project_id).order('id').execute()
+        response = supabase.table('pages').select('id, project_id, url, page_type, created_at, tech_audit_data, funnel_stage, source_page_id, content_description, keywords, product_action').eq('project_id', project_id).order('id').execute()
         
         import sys
         print(f"DEBUG: get_pages for {project_id} found {len(response.data) if response.data else 0} pages.", file=sys.stderr)
