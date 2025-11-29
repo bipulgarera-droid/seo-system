@@ -643,7 +643,7 @@ import subprocess
 def fetch_with_curl(url, use_chrome_ua=True):
     """Fetch URL using system curl to bypass TLS fingerprinting blocks."""
     try:
-        cmd = ['curl', '-L', '-s']
+        cmd = ['curl', '-L', '-s', '--max-time', '10']
         
         if use_chrome_ua:
             cmd.extend([
@@ -1440,9 +1440,18 @@ def perform_tech_audit(project_id, limit=20):
             
             # Update DB
             print(f"DEBUG: Updating DB for {url}...")
-            supabase.table('pages').update({
+            update_payload = {
                 'tech_audit_data': existing_data
-            }).eq('id', p['id']).execute()
+            }
+            
+            # Also update top-level columns if found
+            if tech_data.get('title') and tech_data.get('title') != 'Pending Scan':
+                update_payload['title'] = tech_data['title']
+                
+            if tech_data.get('meta_description'):
+                update_payload['meta_description'] = tech_data['meta_description']
+                
+            supabase.table('pages').update(update_payload).eq('id', p['id']).execute()
             
             audited_count += 1
             print(f"DEBUG: Successfully audited {url}")
