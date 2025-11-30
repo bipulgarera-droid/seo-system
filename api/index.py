@@ -23,7 +23,9 @@ import mimetypes
 load_dotenv('.env.local')
 load_dotenv()
 
-app = Flask(__name__, static_folder='../public', static_url_path='')
+# Use absolute path for static folder to avoid relative path issues in Docker
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'public'), static_url_path='')
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 # Disable cache for development
 CORS(app)
 
