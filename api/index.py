@@ -21,11 +21,10 @@ import io
 import mimetypes
 
 load_dotenv('.env.local')
-load_dotenv()
-
-# Use absolute path for static folder to avoid relative path issues in Docker
+# Use absolute path for static folder
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'public'), static_url_path='')
+# Remove static_url_path='' to avoid conflict with root route
+app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'public'))
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 # Disable cache for development
 CORS(app)
 
@@ -79,18 +78,22 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and
 @app.route('/')
 def home():
     try:
-        # Debug: Check if file exists
-        file_path = os.path.join(app.static_folder, 'agency.html')
+        # Manually read the file to avoid static_folder/send_static_file issues
+        file_path = os.path.join(BASE_DIR, 'public', 'agency.html')
+        
         if not os.path.exists(file_path):
+            print(f"Error: File not found at {file_path}", file=sys.stderr)
             return f"Error: agency.html not found at {file_path}", 404
             
-        response = app.make_response(app.send_static_file('agency.html'))
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        response = app.make_response(content)
+        response.headers['Content-Type'] = 'text/html'
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
         return response
     except Exception as e:
-        print(f"Home route error: {e}", file=sys.stderr)
+        print(f"Home route crash: {e}", file=sys.stderr)
         return f"Server Error: {str(e)}", 500
 
 @app.route('/debug-files')
@@ -104,11 +107,20 @@ def debug_files():
 
 @app.route('/dashboard')
 def dashboard():
-    response = app.make_response(app.send_static_file('dashboard.html'))
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+    try:
+        file_path = os.path.join(BASE_DIR, 'public', 'dashboard.html')
+        if not os.path.exists(file_path):
+            return f"Error: dashboard.html not found at {file_path}", 404
+            
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        response = app.make_response(content)
+        response.headers['Content-Type'] = 'text/html'
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+    except Exception as e:
+        return f"Server Error: {str(e)}", 500
 
 @app.route('/health')
 def health_check():
