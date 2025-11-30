@@ -2977,6 +2977,47 @@ def crawl_project_endpoint():
         print(f"Error crawling project: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+def generate_content_via_rest(prompt, api_key, model="gemini-2.5-pro", use_grounding=True):
+    """
+    Generate content using Gemini REST API directly to avoid SDK crashes.
+    Supports Google Search Grounding.
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    
+    if use_grounding:
+        data["tools"] = [{
+            "google_search": {}  # Enable Google Search Grounding
+        }]
+        
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=60)
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extract text
+        try:
+            return result['candidates'][0]['content']['parts'][0]['text']
+        except (KeyError, IndexError):
+            print(f"DEBUG: Unexpected REST response structure: {result}")
+            return None
+            
+    except Exception as e:
+        print(f"DEBUG: REST API call failed: {e}")
+        if 'response' in locals() and response is not None:
+             print(f"DEBUG: Response content: {response.text}")
+        raise e
+
 @app.route('/api/batch-update-pages', methods=['POST'])
 def batch_update_pages():
     print(f"====== BATCH UPDATE PAGES CALLED ======", flush=True)
@@ -3142,15 +3183,17 @@ def batch_update_pages():
                                 log_debug(f"Error constructing prompt: {prompt_err}")
                                 raise prompt_err
 
-                            # Use NEW SDK with Grounding for Products
-                            print(f"DEBUG: Generating content for Product: {page_title} using gemini-2.5-pro", flush=True)
+                            # Use REST API for Products to avoid SDK crash
+                            print(f"DEBUG: Generating content for Product: {page_title} using gemini-2.5-pro (REST)", flush=True)
                             try:
-                                response = client_with_grounding.models.generate_content(
+                                generated_text = generate_content_via_rest(
+                                    prompt=prompt,
+                                    api_key=api_key,
                                     model="gemini-2.5-pro",
-                                    contents=prompt,
-                                    config=types.GenerateContentConfig(tools=[tool])
+                                    use_grounding=True
                                 )
-                                generated_text = response.text
+                                if not generated_text:
+                                    raise Exception("Empty response from Gemini REST API")
                                 print(f"DEBUG: Generation successful. Length: {len(generated_text)}", flush=True)
                             except Exception as gen_err:
                                 print(f"DEBUG: Gemini generation failed: {gen_err}", flush=True)
@@ -3175,7 +3218,8 @@ def batch_update_pages():
 
     **PAGE DETAILS**:
     - URL: {page['url']}
-    - Category Title: {page_title}
+    - Title: {page_title}
+    - Category Name: {page_title}
 
     **EXISTING CONTENT** (Source of Truth):
     ```
@@ -3204,13 +3248,15 @@ def batch_update_pages():
     -   Return the full page content in Markdown.
     -   Include a **Meta Description** at the top.
     """
-                            # Use NEW SDK with Grounding for Categories too
-                            response = client_with_grounding.models.generate_content(
+                            # Use REST API for Categories too
+                            generated_text = generate_content_via_rest(
+                                prompt=prompt,
+                                api_key=api_key,
                                 model="gemini-2.5-pro",
-                                contents=prompt,
-                                config=types.GenerateContentConfig(tools=[tool])
+                                use_grounding=True
                             )
-                            generated_text = response.text
+                            if not generated_text:
+                                raise Exception("Empty response from Gemini REST API")
                             
                         elif page_type == 'Topic':
                             log_debug("Page type is Topic, skipping to Topic logic...")
