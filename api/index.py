@@ -3497,373 +3497,380 @@ def batch_update_pages():
             print(f"====== GENERATE MOFU ACTION ======", flush=True)
             log_debug(f"GENERATE_MOFU: Starting for {len(page_ids)} pages")
             print(f"DEBUG: Received generate_mofu action for page_ids: {page_ids}")
-            print(f"DEBUG: Received generate_mofu action for page_ids: {page_ids}")
-            # Use new google-genai SDK with Grounding (ENABLED!)
-            # This helps verify that the topic angles are actually trending/relevant.
-            client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            tool = types.Tool(google_search=types.GoogleSearch())
+        elif action == 'generate_mofu':
+            # Async processing for MoFu
+            import threading
             
-            for pid in page_ids:
-                print(f"DEBUG: Processing page_id: {pid}")
-                # Get Product Page Data
-                res = supabase.table('pages').select('*').eq('id', pid).single().execute()
-                if not res.data: 
-                    print(f"DEBUG: Page {pid} not found")
-                    continue
-                product = res.data
-                product_tech = product.get('tech_audit_data', {})
-                
-                print(f"Researching MoFu opportunities for {product.get('url')}...")
-                
-                # === NEW DATA-FIRST WORKFLOW ===
-                
-                # Step 0: Ensure Content Context (Fix for "Memoir vs Candles")
-                body_content = product_tech.get('body_content', '')
-                product_title = product_tech.get('title', 'Untitled')
-                
-                # FIX: If title is "Pending Scan" or generic, force scrape to get REAL title
-                is_bad_title = not product_title or 'pending' in product_title.lower() or 'untitled' in product_title.lower() or 'scan' in product_title.lower()
-                
-                if not body_content or len(body_content) < 100 or is_bad_title:
-                    log_debug(f"Content/Title missing or bad ('{product_title}') for {product['url']}, scraping now...")
-                    scraped = scrape_page_content(product['url'])
-                    if scraped:
-                        body_content = scraped['body_content']
-                        # Use scraped title if current is bad
-                        if is_bad_title and scraped.get('title'):
-                            product_title = scraped['title']
-                            log_debug(f"Updated title from '{product_tech.get('title')}' to '{product_title}'")
-                        
-                        # Update DB so we don't scrape again
-                        current_tech = product.get('tech_audit_data', {})
-                        current_tech['body_content'] = body_content
-                        current_tech['title'] = product_title # Save real title
-                        
-                        supabase.table('pages').update({
-                            "tech_audit_data": current_tech
-                        }).eq('id', pid).execute()
-                        product_tech = current_tech # Update local var
-                
-                log_debug(f"Using Product Title: {product_title}")
-
-                # Fetch Source Product Page
-                product_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
-                if not product_res.data:
-                    print(f"DEBUG: Product page not found for ID: {pid}", flush=True)
-                    continue
-                product = product_res.data
-                product_title = product.get('tech_audit_data', {}).get('title', '')
-                print(f"DEBUG: Processing Product: {product_title}", flush=True)
-                
-                # Fetch Project Settings
-                project_res = supabase.table('projects').select('location, language').eq('id', product['project_id']).single().execute()
-                project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
-                print(f"DEBUG: Project Settings: {project_loc}, {project_lang}", flush=True)
-
-                # Step 1: Get Keywords
-                keywords = []
-                # (Skipping to where I can inject prints easily)
-                # I'll just add prints around the Gemini call in the next block
-                # Step 1: Generate MULTIPLE Broad Seed Keywords for DataForSEO
-                # Strategy: Don't search for specific product - search for CATEGORY + common queries
-                if not product_title:
-                    product_title = get_title_from_url(product['url'])
-
-                print(f"DEBUG: Analyzing context for: {product_title} (Loc: {project_loc}, Lang: {project_lang})")
-                
+            def process_mofu_generation(page_ids, api_key):
+                log_debug(f"Background MoFu thread started for pages: {page_ids}")
                 try:
-                    # NEW STRATEGY: Generate multiple broad seeds
-                    context_prompt = f"""Analyze this product to generate 3-5 BROAD keyword seeds for DataForSEO research.
-
-Product Title: "{product_title}"
-Page Content: {body_content[:2000]}
-
-Task:
-1. Identify the product CATEGORY (e.g., "carrier oils", "lipstick", "sunscreen", "candles")
-2. Generate 3-5 BROAD search terms that people use when researching this category in **{project_loc}**.
-3. DO NOT use the specific product name - use GENERIC category terms
-
-Examples:
-- Product: "Apricot Kernel Oil" → Seeds: ["carrier oil benefits", "oil for skin", "facial oils", "natural oils skincare"]
-- Product: "MAC Ruby Woo Lipstick" → Seeds: ["red lipstick", "matte lipstick", "long lasting lipstick", "lipstick shades"]
-- Product: "Supergoop Sunscreen" → Seeds: ["face sunscreen", "spf for skin", "sunscreen benefits", "daily sunscreen"]
-
-OUTPUT: Return ONLY a comma-separated list of 3-5 broad keywords. No explanations.
-Example output: carrier oil benefits, oil for skin, facial oils, natural oils"""
+                    # Use new google-genai SDK with Grounding (ENABLED!)
+                    client = genai_new.Client(api_key=api_key)
+                    tool = types.Tool(google_search=types.GoogleSearch())
                     
-                    seed_res = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=context_prompt,
-                        config=types.GenerateContentConfig(tools=[tool])
-                    )
-                    seeds_str = seed_res.text.strip().replace('"', '').replace("'", "")
-                    broad_seeds = [s.strip() for s in seeds_str.split(',') if s.strip()]
-                    
-                    # Fallback if AI fails
-                    if not broad_seeds:
-                        broad_seeds = [product_title]
-                    
-                    log_debug(f"Generated {len(broad_seeds)} broad seeds: {broad_seeds}")
-                    print(f"DEBUG: Broad seed keywords: {broad_seeds}")
-                    
-                except Exception as e:
-                    print(f"⚠ Seed generation failed: {e}. Using product title.")
-                    broad_seeds = [product_title]
-
-                
-                # NEW: Use Gemini 2.0 Flash with Grounding as PRIMARY source (User Request)
-                print(f"DEBUG: Using Gemini 2.0 Flash for keyword research (Primary)...")
-                log_debug("Calling perform_gemini_research as PRIMARY source")
-                
-                gemini_result = perform_gemini_research(product_title, location=project_loc, language=project_lang)
-                keywords = []
-                
-                if gemini_result and gemini_result.get('keywords'):
-                    print(f"✓ Gemini Research successful. Found {len(gemini_result['keywords'])} keywords.")
-                    for k in gemini_result['keywords']:
-                        keywords.append({
-                            'keyword': k.get('keyword'),
-                            'volume': 100, # Placeholder volume since Gemini doesn't provide it
-                            'score': 100,
-                            'cpc': 0,
-                            'competition': 0,
-                            'intent': k.get('intent', 'Commercial')
-                        })
-                else:
-                    print(f"⚠ Gemini Research failed. Using fallback.")
-                    keywords = [{'keyword': product_title, 'volume': 0, 'score': 0, 'cpc': 0, 'competition': 0}]
-
-
-                
-                # Step 2: Prepare Data for Topic Generation (No Deep Research yet)
-                log_debug("Skipping deep research (will be done in 'Conduct Research' stage).")
-                
-                # Format keyword list for prompt
-                keyword_list = '\n'.join([f"- {k['keyword']} ({k['volume']} searches/month)" for k in keywords[:50]])
-                
-                # Minimal research data for now
-                research_data = {
-                    "keywords": keywords,
-                    "stage": "research_pending"
-                }
-
-
-                # Step 4: Generate Topics from REAL DATA
-                import datetime
-                current_year = datetime.datetime.now().year
-                next_year = current_year + 1
-                
-                topic_prompt = f"""You are an SEO Content Strategist. Generate 6 MoFu (Middle-of-Funnel) article topics based on REAL keyword data.
-
-**Product**: {product_title}
-**Target Audience**: {project_loc} ({project_lang})
-
-**VERIFIED HIGH-VOLUME KEYWORDS** (Scored by Opportunity):
-{keyword_list}
-
-**YOUR TASK**:
-Create 6 MoFu topics. For EACH topic, assign ALL semantically relevant keywords from the list above (could be 3-15 keywords per topic - include as many as naturally fit the angle).
-
-**Requirements**:
-1. Each topic must target a primary keyword (highest opportunity score for that angle)
-2. Include ALL secondary keywords that semantically match the topic angle
-3. Topics should be Middle-of-Funnel (Comparison, Best Of, Guide, vs)
-
-**Topic Types**:
-- "Best X for Y in {current_year}" (roundup/comparison)
-- "Product vs Competitor" (head-to-head comparison)
-- "Top Alternatives to X" (alternative guides)  
-- Use cases backed by research
-
-**Output Format** (JSON):
-{{
-  "topics": [
-    {{
-      "title": "[Exact title - include year {current_year} if relevant]",
-      "slug": "url-friendly-slug",
-      "description": "2-sentence description of content angle",
-      "keyword_cluster": [
-        {{"keyword": "[keyword1]", "volume": [INTEGER_FROM_INPUT], "is_primary": true}},
-        {{"keyword": "[keyword2]", "volume": [INTEGER_FROM_INPUT], "is_primary": false}},
-        ...
-      ],
-      "research_notes": "Why this topic (reference SERP competitor or research insight)"
-    }}
-  ]
-}}
-
-CRITICAL: 
-1. Use EXACT integers for volume from the provided list. DO NOT write "Estimated".
-2. Assign keywords based on semantic relevance. Don't artificially limit - if 12 keywords fit a topic, include all 12.
-"""
-
-
-                
-                try:
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=topic_prompt,
-                        config=types.GenerateContentConfig(tools=[tool])
-                    )
-                    text = response.text.strip()
-                    if text.startswith('```json'): text = text[7:]
-                    if text.startswith('```'): text = text[3:]
-                    if text.endswith('```'): text = text[:-3]
-                    text = text.strip()
-                    
-                    # Parse JSON with error handling
-                    try:
-                        data = json.loads(text)
-                    except json.JSONDecodeError as json_err:
-                        log_debug(f"JSON parse error: {json_err}. Response: {text[:300]}")
-                        print(f"✗ Gemini returned invalid JSON. Skipping MoFu for {product_title}")
-                        continue  # Skip to next product
-                    
-                    topics = data.get('topics', [])
-                    if not topics:
-                        log_debug("No topics in AI response")
-                        continue
-                    
-                    new_pages = []
-                    for t in topics:
-                        # Handle keyword cluster (multiple keywords per topic)
-                        keyword_cluster = t.get('keyword_cluster', [])
+                    for pid in page_ids:
+                        print(f"DEBUG: Processing page_id: {pid}")
+                        # Get Product Page Data
+                        res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        if not res.data: 
+                            print(f"DEBUG: Page {pid} not found")
+                            continue
+                        product = res.data
+                        product_tech = product.get('tech_audit_data', {})
                         
-                        if keyword_cluster:
-                            # NEW FORMAT: "keyword | intent | secondary intent" (no volume)
-                            # Classify intent based on keyword patterns
-                            def classify_intent(kw_text):
-                                kw_lower = kw_text.lower()
-                                # Transactional indicators
-                                if any(word in kw_lower for word in ['buy', 'price', 'shop', 'purchase', 'best', 'top', 'review', 'vs', 'alternative']):
-                                    return 'transactional'
-                                # Commercial indicators
-                                elif any(word in kw_lower for word in ['benefits', 'how to', 'uses', 'guide', 'comparison', 'difference']):
-                                    return 'commercial'
-                                # Default: informational
-                                else:
-                                    return 'informational'
-                            
-                            keywords_str = '\n'.join([
-                                f"{kw['keyword']} | {classify_intent(kw['keyword'])} |"
-                                for kw in keyword_cluster
-                            ])
-                            # Get primary keyword for research reference
-                            primary_kw = next((kw for kw in keyword_cluster if kw.get('is_primary')), keyword_cluster[0] if keyword_cluster else {})
-                        else:
-                            keywords_str = ""
-                            primary_kw = {}
+                        print(f"Researching MoFu opportunities for {product.get('url')}...")
                         
-                        # Combine general research with topic-specific notes
-                        topic_research = research_data.copy()
-                        topic_research['notes'] = t.get('research_notes', '')
-                        topic_research['keyword_cluster'] = keyword_cluster
-                        topic_research['primary_keyword'] = primary_kw.get('keyword', '')
+                        # === NEW DATA-FIRST WORKFLOW ===
                         
-                        new_pages.append({
-                            "project_id": product['project_id'],
-                            "source_page_id": pid,
-                            "url": f"{product['url'].rstrip('/')}/{t['slug']}",
-                            "page_type": "Topic",
-                            "funnel_stage": "MoFu",
-                            "product_action": "Idle",
-                            "tech_audit_data": {
-                                "title": t['title'],
-                                "meta_description": t['description'],
-                                "meta_title": t['title']
-                            },
-                            "content_description": t['description'],
-                            "keywords": keywords_str,  # Data-backed keywords with volume
-                            "slug": t['slug'],
-                            "research_data": topic_research  # Store all research including citations
-                        })
-                    
-                    
-                    
-                    if new_pages:
-                        print(f"DEBUG: Attempting to insert {len(new_pages)} MoFu topics...", file=sys.stderr)
+                        # Step 0: Ensure Content Context (Fix for "Memoir vs Candles")
+                        body_content = product_tech.get('body_content', '')
+                        product_title = product_tech.get('title', 'Untitled')
+                        
+                        # FIX: If title is "Pending Scan" or generic, force scrape to get REAL title
+                        is_bad_title = not product_title or 'pending' in product_title.lower() or 'untitled' in product_title.lower() or 'scan' in product_title.lower()
+                        
+                        if not body_content or len(body_content) < 100 or is_bad_title:
+                            log_debug(f"Content/Title missing or bad ('{product_title}') for {product['url']}, scraping now...")
+                            scraped = scrape_page_content(product['url'])
+                            if scraped:
+                                body_content = scraped['body_content']
+                                # Use scraped title if current is bad
+                                if is_bad_title and scraped.get('title'):
+                                    product_title = scraped['title']
+                                    log_debug(f"Updated title from '{product_tech.get('title')}' to '{product_title}'")
+                                
+                                # Update DB so we don't scrape again
+                                current_tech = product.get('tech_audit_data', {})
+                                current_tech['body_content'] = body_content
+                                current_tech['title'] = product_title # Save real title
+                                
+                                supabase.table('pages').update({
+                                    "tech_audit_data": current_tech
+                                }).eq('id', pid).execute()
+                                product_tech = current_tech # Update local var
+                        
+                        log_debug(f"Using Product Title: {product_title}")
+
+                        # Fetch Source Product Page
+                        product_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        if not product_res.data:
+                            print(f"DEBUG: Product page not found for ID: {pid}", flush=True)
+                            continue
+                        product = product_res.data
+                        product_title = product.get('tech_audit_data', {}).get('title', '')
+                        print(f"DEBUG: Processing Product: {product_title}", flush=True)
+                        
+                        # Fetch Project Settings
+                        project_res = supabase.table('projects').select('location, language').eq('id', product['project_id']).single().execute()
+                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
+                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                        print(f"DEBUG: Project Settings: {project_loc}, {project_lang}", flush=True)
+
+                        # Step 1: Get Keywords
+                        keywords = []
+                        # (Skipping to where I can inject prints easily)
+                        # I'll just add prints around the Gemini call in the next block
+                        # Step 1: Generate MULTIPLE Broad Seed Keywords for DataForSEO
+                        # Strategy: Don't search for specific product - search for CATEGORY + common queries
+                        if not product_title:
+                            product_title = get_title_from_url(product['url'])
+
+                        print(f"DEBUG: Analyzing context for: {product_title} (Loc: {project_loc}, Lang: {project_lang})")
+                        
                         try:
-                            insert_res = supabase.table('pages').insert(new_pages).execute()
-                            print("DEBUG: ✓ MoFu topics inserted successfully.", file=sys.stderr)
-                            
-                            # AUTO-KEYWORD RESEARCH (Gemini)
-                            if insert_res.data:
-                                print(f"DEBUG: Starting Auto-Keyword Research for {len(insert_res.data)} topics...", file=sys.stderr)
-                                for inserted_page in insert_res.data:
-                                    try:
-                                        p_id = inserted_page['id']
-                                        # Handle tech_audit_data being a string or dict
-                                        t_data = inserted_page.get('tech_audit_data', {})
-                                        if isinstance(t_data, str):
-                                            try: t_data = json.loads(t_data)
-                                            except: t_data = {}
-                                            
-                                        p_title = t_data.get('title', '')
-                                        if not p_title: continue
-                                        
-                                        log_debug(f"Auto-Researching keywords for: {p_title} (Loc: {project_loc})")
-                                        gemini_result = perform_gemini_research(p_title, location=project_loc, language=project_lang)
-                                        
-                                        if gemini_result:
-                                            keywords = gemini_result.get('keywords', [])
-                                            formatted_keywords = '\n'.join([
-                                                f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |"
-                                                for kw in keywords if kw.get('keyword')
-                                            ])
-                                            
-                                            # Create research data (partial)
-                                            research_data = {
-                                                "stage": "keywords_only", 
-                                                "mode": "hybrid",
-                                                "competitor_urls": [c['url'] for c in gemini_result.get('competitors', [])],
-                                                "ranked_keywords": keywords,
-                                                "formatted_keywords": formatted_keywords
-                                            }
-                                            
-                                            supabase.table('pages').update({
-                                                "keywords": formatted_keywords,
-                                                "research_data": research_data
-                                            }).eq('id', p_id).execute()
-                                            log_debug(f"✓ Keywords saved for {p_title}")
-                                    except Exception as research_err:
-                                        log_debug(f"Auto-Research failed for {p_title}: {research_err}")
-                        except Exception as insert_error:
-                            print(f"DEBUG: Error inserting with research_data: {insert_error}", file=sys.stderr)
-                            # Fallback: Try inserting without research_data (if column missing)
-                            if 'research_data' in str(insert_error) or 'column' in str(insert_error):
-                                print("DEBUG: Retrying insert without research_data column...", file=sys.stderr)
-                                for p in new_pages:
-                                    p.pop('research_data', None)
-                                supabase.table('pages').insert(new_pages).execute()
-                                print("DEBUG: ✓ MoFu topics inserted (without research data).", file=sys.stderr)
-                            else:
-                                raise insert_error
-                    else:
-                        print("DEBUG: No new pages to insert (topics list empty).", file=sys.stderr)
-                    
-                    # Update Source Page Status
-                    supabase.table('pages').update({"product_action": "MoFu Generated"}).eq('id', pid).execute()
-                
-                except Exception as e:
-                    print(f"DEBUG: Error generating MoFu topics: {e}", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc()
-                    return jsonify({"error": f"Failed to generate MoFu topics: {str(e)}"}), 500
-            
-            # Track total inserted topics
-            total_inserted = 0
-            
-            for page_id in page_ids:
-                # ... (loop content) ...
-                # Inside loop, increment total_inserted
-                # But since I can't easily inject into the loop with replace_file_content without context, 
-                # I will just modify the return statement to check a flag if I could, but I can't.
-                # Actually, I'll just return the success message for now, as the prompt fix is the most likely solution.
-                # If I try to modify the whole loop it's too risky.
-                pass
+                            # NEW STRATEGY: Generate multiple broad seeds
+                            context_prompt = f"""Analyze this product to generate 3-5 BROAD keyword seeds for DataForSEO research.
 
-            return jsonify({"message": "MoFu generation complete"})
+        Product Title: "{product_title}"
+        Page Content: {body_content[:2000]}
+
+        Task:
+        1. Identify the product CATEGORY (e.g., "carrier oils", "lipstick", "sunscreen", "candles")
+        2. Generate 3-5 BROAD search terms that people use when researching this category in **{project_loc}**.
+        3. DO NOT use the specific product name - use GENERIC category terms
+
+        Examples:
+        - Product: "Apricot Kernel Oil" → Seeds: ["carrier oil benefits", "oil for skin", "facial oils", "natural oils skincare"]
+        - Product: "MAC Ruby Woo Lipstick" → Seeds: ["red lipstick", "matte lipstick", "long lasting lipstick", "lipstick shades"]
+        - Product: "Supergoop Sunscreen" → Seeds: ["face sunscreen", "spf for skin", "sunscreen benefits", "daily sunscreen"]
+
+        OUTPUT: Return ONLY a comma-separated list of 3-5 broad keywords. No explanations.
+        Example output: carrier oil benefits, oil for skin, facial oils, natural oils"""
+                            
+                            seed_res = client.models.generate_content(
+                                model="gemini-2.5-flash",
+                                contents=context_prompt,
+                                config=types.GenerateContentConfig(tools=[tool])
+                            )
+                            seeds_str = seed_res.text.strip().replace('"', '').replace("'", "")
+                            broad_seeds = [s.strip() for s in seeds_str.split(',') if s.strip()]
+                            
+                            # Fallback if AI fails
+                            if not broad_seeds:
+                                broad_seeds = [product_title]
+                            
+                            log_debug(f"Generated {len(broad_seeds)} broad seeds: {broad_seeds}")
+                            print(f"DEBUG: Broad seed keywords: {broad_seeds}")
+                            
+                        except Exception as e:
+                            print(f"⚠ Seed generation failed: {e}. Using product title.")
+                            broad_seeds = [product_title]
+
+                        
+                        # NEW: Use Gemini 2.0 Flash with Grounding as PRIMARY source (User Request)
+                        print(f"DEBUG: Using Gemini 2.0 Flash for keyword research (Primary)...")
+                        log_debug("Calling perform_gemini_research as PRIMARY source")
+                        
+                        gemini_result = perform_gemini_research(product_title, location=project_loc, language=project_lang)
+                        keywords = []
+                        
+                        if gemini_result and gemini_result.get('keywords'):
+                            print(f"✓ Gemini Research successful. Found {len(gemini_result['keywords'])} keywords.")
+                            for k in gemini_result['keywords']:
+                                keywords.append({
+                                    'keyword': k.get('keyword'),
+                                    'volume': 100, # Placeholder volume since Gemini doesn't provide it
+                                    'score': 100,
+                                    'cpc': 0,
+                                    'competition': 0,
+                                    'intent': k.get('intent', 'Commercial')
+                                })
+                        else:
+                            print(f"⚠ Gemini Research failed. Using fallback.")
+                            keywords = [{'keyword': product_title, 'volume': 0, 'score': 0, 'cpc': 0, 'competition': 0}]
+
+
+                        
+                        # Step 2: Prepare Data for Topic Generation (No Deep Research yet)
+                        log_debug("Skipping deep research (will be done in 'Conduct Research' stage).")
+                        
+                        # Format keyword list for prompt
+                        keyword_list = '\n'.join([f"- {k['keyword']} ({k['volume']} searches/month)" for k in keywords[:50]])
+                        
+                        # Minimal research data for now
+                        research_data = {
+                            "keywords": keywords,
+                            "stage": "research_pending"
+                        }
+
+
+                        # Step 4: Generate Topics from REAL DATA
+                        import datetime
+                        current_year = datetime.datetime.now().year
+                        next_year = current_year + 1
+                        
+                        topic_prompt = f"""You are an SEO Content Strategist. Generate 6 MoFu (Middle-of-Funnel) article topics based on REAL keyword data.
+
+        **Product**: {product_title}
+        **Target Audience**: {project_loc} ({project_lang})
+
+        **VERIFIED HIGH-VOLUME KEYWORDS** (Scored by Opportunity):
+        {keyword_list}
+
+        **YOUR TASK**:
+        Create 6 MoFu topics. For EACH topic, assign ALL semantically relevant keywords from the list above (could be 3-15 keywords per topic - include as many as naturally fit the angle).
+
+        **Requirements**:
+        1. Each topic must target a primary keyword (highest opportunity score for that angle)
+        2. Include ALL secondary keywords that semantically match the topic angle
+        3. Topics should be Middle-of-Funnel (Comparison, Best Of, Guide, vs)
+
+        **Topic Types**:
+        - "Best X for Y in {current_year}" (roundup/comparison)
+        - "Product vs Competitor" (head-to-head comparison)
+        - "Top Alternatives to X" (alternative guides)  
+        - Use cases backed by research
+
+        **Output Format** (JSON):
+        {{
+          "topics": [
+            {{
+              "title": "[Exact title - include year {current_year} if relevant]",
+              "slug": "url-friendly-slug",
+              "description": "2-sentence description of content angle",
+              "keyword_cluster": [
+                {{"keyword": "[keyword1]", "volume": [INTEGER_FROM_INPUT], "is_primary": true}},
+                {{"keyword": "[keyword2]", "volume": [INTEGER_FROM_INPUT], "is_primary": false}},
+                ...
+              ],
+              "research_notes": "Why this topic (reference SERP competitor or research insight)"
+            }}
+          ]
+        }}
+
+        CRITICAL: 
+        1. Use EXACT integers for volume from the provided list. DO NOT write "Estimated".
+        2. Assign keywords based on semantic relevance. Don't artificially limit - if 12 keywords fit a topic, include all 12.
+        """
+
+
+                        
+                        try:
+                            response = client.models.generate_content(
+                                model="gemini-2.5-flash",
+                                contents=topic_prompt,
+                                config=types.GenerateContentConfig(tools=[tool])
+                            )
+                            text = response.text.strip()
+                            if text.startswith('```json'): text = text[7:]
+                            if text.startswith('```'): text = text[3:]
+                            if text.endswith('```'): text = text[:-3]
+                            text = text.strip()
+                            
+                            # Parse JSON with error handling
+                            try:
+                                data = json.loads(text)
+                            except json.JSONDecodeError as json_err:
+                                log_debug(f"JSON parse error: {json_err}. Response: {text[:300]}")
+                                print(f"✗ Gemini returned invalid JSON. Skipping MoFu for {product_title}")
+                                continue  # Skip to next product
+                            
+                            topics = data.get('topics', [])
+                            if not topics:
+                                log_debug("No topics in AI response")
+                                continue
+                            
+                            new_pages = []
+                            for t in topics:
+                                # Handle keyword cluster (multiple keywords per topic)
+                                keyword_cluster = t.get('keyword_cluster', [])
+                                
+                                if keyword_cluster:
+                                    # NEW FORMAT: "keyword | intent | secondary intent" (no volume)
+                                    # Classify intent based on keyword patterns
+                                    def classify_intent(kw_text):
+                                        kw_lower = kw_text.lower()
+                                        # Transactional indicators
+                                        if any(word in kw_lower for word in ['buy', 'price', 'shop', 'purchase', 'best', 'top', 'review', 'vs', 'alternative']):
+                                            return 'transactional'
+                                        # Commercial indicators
+                                        elif any(word in kw_lower for word in ['benefits', 'how to', 'uses', 'guide', 'comparison', 'difference']):
+                                            return 'commercial'
+                                        # Default: informational
+                                        else:
+                                            return 'informational'
+                                    
+                                    keywords_str = '\n'.join([
+                                        f"{kw['keyword']} | {classify_intent(kw['keyword'])} |"
+                                        for kw in keyword_cluster
+                                    ])
+                                    # Get primary keyword for research reference
+                                    primary_kw = next((kw for kw in keyword_cluster if kw.get('is_primary')), keyword_cluster[0] if keyword_cluster else {})
+                                else:
+                                    keywords_str = ""
+                                    primary_kw = {}
+                                
+                                # Combine general research with topic-specific notes
+                                topic_research = research_data.copy()
+                                topic_research['notes'] = t.get('research_notes', '')
+                                topic_research['keyword_cluster'] = keyword_cluster
+                                topic_research['primary_keyword'] = primary_kw.get('keyword', '')
+                                
+                                new_pages.append({
+                                    "project_id": product['project_id'],
+                                    "source_page_id": pid,
+                                    "url": f"{product['url'].rstrip('/')}/{t['slug']}",
+                                    "page_type": "Topic",
+                                    "funnel_stage": "MoFu",
+                                    "product_action": "Idle",
+                                    "tech_audit_data": {
+                                        "title": t['title'],
+                                        "meta_description": t['description'],
+                                        "meta_title": t['title']
+                                    },
+                                    "content_description": t['description'],
+                                    "keywords": keywords_str,  # Data-backed keywords with volume
+                                    "slug": t['slug'],
+                                    "research_data": topic_research  # Store all research including citations
+                                })
+                            
+                            
+                            
+                            if new_pages:
+                                print(f"DEBUG: Attempting to insert {len(new_pages)} MoFu topics...", file=sys.stderr)
+                                try:
+                                    insert_res = supabase.table('pages').insert(new_pages).execute()
+                                    print("DEBUG: ✓ MoFu topics inserted successfully.", file=sys.stderr)
+                                    
+                                    # AUTO-KEYWORD RESEARCH (Gemini)
+                                    if insert_res.data:
+                                        print(f"DEBUG: Starting Auto-Keyword Research for {len(insert_res.data)} topics...", file=sys.stderr)
+                                        for inserted_page in insert_res.data:
+                                            try:
+                                                p_id = inserted_page['id']
+                                                # Handle tech_audit_data being a string or dict
+                                                t_data = inserted_page.get('tech_audit_data', {})
+                                                if isinstance(t_data, str):
+                                                    try: t_data = json.loads(t_data)
+                                                    except: t_data = {}
+                                                    
+                                                p_title = t_data.get('title', '')
+                                                if not p_title: continue
+                                                
+                                                log_debug(f"Auto-Researching keywords for: {p_title} (Loc: {project_loc})")
+                                                gemini_result = perform_gemini_research(p_title, location=project_loc, language=project_lang)
+                                                
+                                                if gemini_result:
+                                                    keywords = gemini_result.get('keywords', [])
+                                                    formatted_keywords = '\n'.join([
+                                                        f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |"
+                                                        for kw in keywords if kw.get('keyword')
+                                                    ])
+                                                    
+                                                    # Create research data (partial)
+                                                    research_data = {
+                                                        "stage": "keywords_only", 
+                                                        "mode": "hybrid",
+                                                        "competitor_urls": [c['url'] for c in gemini_result.get('competitors', [])],
+                                                        "ranked_keywords": keywords,
+                                                        "formatted_keywords": formatted_keywords
+                                                    }
+                                                    
+                                                    supabase.table('pages').update({
+                                                        "keywords": formatted_keywords,
+                                                        "research_data": research_data
+                                                    }).eq('id', p_id).execute()
+                                                    log_debug(f"✓ Keywords saved for {p_title}")
+                                            except Exception as research_err:
+                                                log_debug(f"Auto-Research failed for {p_title}: {research_err}")
+                                except Exception as insert_error:
+                                    print(f"DEBUG: Error inserting with research_data: {insert_error}", file=sys.stderr)
+                                    # Fallback: Try inserting without research_data (if column missing)
+                                    if 'research_data' in str(insert_error) or 'column' in str(insert_error):
+                                        print("DEBUG: Retrying insert without research_data column...", file=sys.stderr)
+                                        for p in new_pages:
+                                            p.pop('research_data', None)
+                                        supabase.table('pages').insert(new_pages).execute()
+                                        print("DEBUG: ✓ MoFu topics inserted (without research data).", file=sys.stderr)
+                                    else:
+                                        raise insert_error
+                            else:
+                                print("DEBUG: No new pages to insert (topics list empty).", file=sys.stderr)
+                            
+                            # Update Source Page Status
+                            supabase.table('pages').update({"product_action": "MoFu Generated"}).eq('id', pid).execute()
+                        
+                        except Exception as e:
+                            print(f"DEBUG: Error generating MoFu topics: {e}", file=sys.stderr)
+                            import traceback
+                            traceback.print_exc()
+                            
+                except Exception as e:
+                    log_debug(f"MoFu Thread Error: {e}")
+
+            # Set status to Processing immediately
+            try:
+                log_debug(f"Updating status to Processing for {page_ids}")
+                supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+            except Exception as e:
+                log_debug(f"Failed to update status to Processing: {e}")
+
+            # Start background thread
+            log_debug("Starting background MoFu thread...")
+            thread = threading.Thread(target=process_mofu_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+            thread.start()
+            
+            return jsonify({"message": "MoFu generation started in background. The status will update to 'Processing...' in the table."})
 
 
         elif action == 'conduct_research':
@@ -3953,210 +3960,230 @@ CRITICAL:
 
 
         elif action == 'generate_tofu':
-            # AI ToFu Topic Generation
-            # Use new google-genai SDK with Grounding (ENABLED!)
-            client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            tool = types.Tool(google_search=types.GoogleSearch())
+            # Async processing for ToFu
+            import threading
             
-            for pid in page_ids:
-                # Fetch Source MoFu Page
-                mofu_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
-                if not mofu_res.data: continue
-                mofu = mofu_res.data
-                mofu_tech = mofu.get('tech_audit_data') or {}
-                
-                print(f"Researching ToFu opportunities for MoFu topic: {mofu_tech.get('title')}...")
-                
-                # === NEW DATA-FIRST WORKFLOW FOR TOFU ===
-                
-                # Fetch Project Settings for Localization (Moved UP)
-                project_res = supabase.table('projects').select('location, language').eq('id', mofu['project_id']).single().execute()
-                project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
-
-                # Step 1: Get broad keyword ideas based on MoFu topic
-                mofu_title = mofu_tech.get('title', '')
-                print(f"Researching ToFu opportunities for: {mofu_title} (Loc: {project_loc})")
-                
-                # Get keyword opportunities from DataForSEO
-                # For ToFu, we want broader terms, so we might strip "Best" or "Review" from the seed
-                seed_keyword = mofu_title.replace('Best ', '').replace('Review', '').replace(' vs ', ' ').strip()
-                # NEW: Use Gemini 2.0 Flash with Grounding as PRIMARY source (User Request)
-                print(f"DEBUG: Using Gemini 2.0 Flash for ToFu keyword research (Primary)...")
-                
-                gemini_result = perform_gemini_research(seed_keyword, location=project_loc, language=project_lang)
-                keywords = []
-                
-                if gemini_result and gemini_result.get('keywords'):
-                    print(f"✓ Gemini Research successful. Found {len(gemini_result['keywords'])} keywords.")
-                    for k in gemini_result['keywords']:
-                        keywords.append({
-                            'keyword': k.get('keyword'),
-                            'volume': 100, # Placeholder
-                            'score': 100,
-                            'cpc': 0,
-                            'competition': 0,
-                            'intent': k.get('intent', 'Informational')
-                        })
-                else:
-                    print(f"⚠ Gemini Research failed. Using fallback.")
-                    keywords = [{'keyword': seed_keyword, 'volume': 0, 'score': 0, 'cpc': 0, 'competition': 0}]
-                
-                # Step 2: Analyze SERP for top 5 keywords (Optional - keeping for context if fast enough, or remove for speed)
-                # For now, we'll keep it lightweight or rely on Gemini Grounding in the prompt.
-                # Let's SKIP DataForSEO SERP to save time/cost, and rely on Gemini Grounding.
-                serp_summary = "Relied on Gemini Grounding for current SERP context."
-                
-                # Step 3: Generate Topics (Lightweight - No Perplexity)
-                import datetime
-                current_year = datetime.datetime.now().year
-                
-                # Format keyword list for prompt
-                keyword_list = '\n'.join([f"- {k['keyword']} ({k['volume']}/mo, Score: {k.get('score', 0)})" for k in keywords[:100]])
-
-                topic_prompt = f"""
-                You are an SEO Strategist. Generate 5 High-Value Top-of-Funnel (ToFu) topic ideas that lead to: {mofu_tech.get('title')}
-                
-                **CONTEXT**:
-                - Target Audience: People at the beginning of their journey (Problem Aware).
-                - Location: {project_loc}
-                - Language: {project_lang}
-                - Goal: Educate them and naturally lead them to the solution (the MoFu topic).
-                
-                **HIGH-OPPORTUNITY KEYWORDS**:
-                {keyword_list}
-                
-                **INSTRUCTIONS**:
-                1.  **Use Grounding**: Search Google to ensure these topics are currently relevant and not already saturated in **{project_loc}**.
-                2.  **Focus**: "What is", "How to", "Guide to", "Benefits of", "Mistakes to Avoid".
-                3.  **Variety**: specific angles, not just generic guides.
-                
-                **LOCALIZATION RULES (CRITICAL)**:
-                1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
-                2. **Units**: Use the measurement system standard for **{project_loc}**.
-                3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
-                4. **Cultural Context**: Use examples relevant to **{project_loc}**.
-                
-                Current Date: {datetime.datetime.now().strftime("%B %Y")}
-                
-                Return a JSON object with a key "topics" containing a list of objects:
-                - "title": Topic Title (Must include a primary keyword)
-                - "slug": URL friendly slug
-                - "description": Brief content description (intent)
-                - "keyword_cluster": List of ALL semantically relevant keywords from the list (aim for 30+ per topic if relevant)
-                - "primary_keyword": The main keyword targeted
-                """
-                
+            def process_tofu_generation(page_ids, api_key):
+                log_debug(f"Background ToFu thread started for pages: {page_ids}")
                 try:
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=topic_prompt,
-                        config=types.GenerateContentConfig(tools=[tool])
-                    )
-                    text = response.text.strip()
-                    if text.startswith('```json'): text = text[7:]
-                    if text.startswith('```'): text = text[3:]
-                    if text.endswith('```'): text = text[:-3]
+                    # Use new google-genai SDK with Grounding (ENABLED!)
+                    client = genai_new.Client(api_key=api_key)
+                    tool = types.Tool(google_search=types.GoogleSearch())
                     
-                    data = json.loads(text)
-                    topics = data.get('topics', [])
-                    
-                    new_pages = []
-                    for t in topics:
-                        # Map selected keywords back to their data
-                        cluster_data = []
-                        for k_str in t.get('keyword_cluster', []):
-                            match = next((k for k in keywords if k['keyword'].lower() == k_str.lower()), None)
-                            if match: cluster_data.append(match)
-                            else: cluster_data.append({'keyword': k_str, 'volume': 0, 'score': 0, 'intent': 'Informational'})
+                    for pid in page_ids:
+                        # Fetch Source MoFu Page
+                        mofu_res = supabase.table('pages').select('*').eq('id', pid).single().execute()
+                        if not mofu_res.data: continue
+                        mofu = mofu_res.data
+                        mofu_tech = mofu.get('tech_audit_data') or {}
                         
-                        # Standardized Format: "keyword | intent |" (Matches MoFu style)
-                        keywords_str = '\n'.join([
-                            f"{k['keyword']} | {k.get('intent', 'Informational')} |"
-                            for k in cluster_data
-                        ])
+                        print(f"Researching ToFu opportunities for MoFu topic: {mofu_tech.get('title')}...")
                         
-                        # Minimal research data (No Perplexity yet)
-                        topic_research = {
-                            "stage": "topic_generated",
-                            "keyword_cluster": cluster_data,
-                            "primary_keyword": t.get('primary_keyword')
-                        }
+                        # === NEW DATA-FIRST WORKFLOW FOR TOFU ===
+                        
+                        # Fetch Project Settings for Localization (Moved UP)
+                        project_res = supabase.table('projects').select('location, language').eq('id', mofu['project_id']).single().execute()
+                        project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
+                        project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
 
-                        new_pages.append({
-                            "project_id": mofu['project_id'],
-                            "source_page_id": pid,
-                            "url": f"{mofu['url'].rsplit('/', 1)[0]}/{t['slug']}", 
-                            "page_type": "Topic",
-                            "funnel_stage": "ToFu",
-                            "product_action": "Idle", # Ready for manual "Conduct Research"
-                            "tech_audit_data": {
-                                "title": t['title'],
-                                "meta_description": t['description'],
-                                "meta_title": t['title']
-                            },
-                            "content_description": t['description'],
-                            "keywords": keywords_str,
-                            "slug": t['slug'],
-                            "research_data": topic_research
-                        })
-                    
-                    if new_pages:
-                        print(f"Attempting to insert {len(new_pages)} ToFu topics...")
-                        insert_res = supabase.table('pages').insert(new_pages).execute()
-                        print("✓ ToFu topics inserted successfully.")
+                        # Step 1: Get broad keyword ideas based on MoFu topic
+                        mofu_title = mofu_tech.get('title', '')
+                        print(f"Researching ToFu opportunities for: {mofu_title} (Loc: {project_loc})")
                         
-                        # AUTO-KEYWORD RESEARCH (Gemini) - Architecture Parity with MoFu
-                        if insert_res.data:
-                            print(f"DEBUG: Starting Auto-Keyword Research for {len(insert_res.data)} ToFu topics...")
-                            for inserted_page in insert_res.data:
-                                try:
-                                    p_id = inserted_page['id']
-                                    t_data = inserted_page.get('tech_audit_data', {})
-                                    if isinstance(t_data, str):
-                                        try: t_data = json.loads(t_data)
-                                        except: t_data = {}
-                                        
-                                    p_title = t_data.get('title', '')
-                                    if not p_title: continue
-                                    
-                                    log_debug(f"Auto-Researching keywords for ToFu: {p_title}")
-                                    # Use project location/language for research
-                                    gemini_result = perform_gemini_research(p_title, location=project_loc, language=project_lang)
-                                    
-                                    if gemini_result:
-                                        keywords = gemini_result.get('keywords', [])
-                                        formatted_keywords = '\n'.join([
-                                            f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |"
-                                            for kw in keywords if kw.get('keyword')
-                                        ])
-                                        
-                                        # Create research data (partial)
-                                        research_data = {
-                                            "stage": "keywords_only", 
-                                            "mode": "hybrid",
-                                            "competitor_urls": [c['url'] for c in gemini_result.get('competitors', [])],
-                                            "ranked_keywords": keywords,
-                                            "formatted_keywords": formatted_keywords
-                                        }
-                                        
-                                        supabase.table('pages').update({
-                                            "keywords": formatted_keywords,
-                                            "research_data": research_data
-                                        }).eq('id', p_id).execute()
-                                        log_debug(f"✓ Keywords saved for {p_title}")
-                                except Exception as research_err:
-                                    log_debug(f"Auto-Research failed for {p_title}: {research_err}")
-                    
-                    # Update Source Page Status
-                    supabase.table('pages').update({"product_action": "ToFu Generated"}).eq('id', pid).execute()
-                    
+                        # Get keyword opportunities from DataForSEO
+                        # For ToFu, we want broader terms, so we might strip "Best" or "Review" from the seed
+                        seed_keyword = mofu_title.replace('Best ', '').replace('Review', '').replace(' vs ', ' ').strip()
+                        # NEW: Use Gemini 2.0 Flash with Grounding as PRIMARY source (User Request)
+                        print(f"DEBUG: Using Gemini 2.0 Flash for ToFu keyword research (Primary)...")
+                        
+                        gemini_result = perform_gemini_research(seed_keyword, location=project_loc, language=project_lang)
+                        keywords = []
+                        
+                        if gemini_result and gemini_result.get('keywords'):
+                            print(f"✓ Gemini Research successful. Found {len(gemini_result['keywords'])} keywords.")
+                            for k in gemini_result['keywords']:
+                                keywords.append({
+                                    'keyword': k.get('keyword'),
+                                    'volume': 100, # Placeholder
+                                    'score': 100,
+                                    'cpc': 0,
+                                    'competition': 0,
+                                    'intent': k.get('intent', 'Informational')
+                                })
+                        else:
+                            print(f"⚠ Gemini Research failed. Using fallback.")
+                            keywords = [{'keyword': seed_keyword, 'volume': 0, 'score': 0, 'cpc': 0, 'competition': 0}]
+                        
+                        # Step 2: Analyze SERP for top 5 keywords (Optional - keeping for context if fast enough, or remove for speed)
+                        # For now, we'll keep it lightweight or rely on Gemini Grounding in the prompt.
+                        # Let's SKIP DataForSEO SERP to save time/cost, and rely on Gemini Grounding.
+                        serp_summary = "Relied on Gemini Grounding for current SERP context."
+                        
+                        # Step 3: Generate Topics (Lightweight - No Perplexity)
+                        import datetime
+                        current_year = datetime.datetime.now().year
+                        
+                        # Format keyword list for prompt
+                        keyword_list = '\n'.join([f"- {k['keyword']} ({k['volume']}/mo, Score: {k.get('score', 0)})" for k in keywords[:100]])
+
+                        topic_prompt = f"""
+                        You are an SEO Strategist. Generate 5 High-Value Top-of-Funnel (ToFu) topic ideas that lead to: {mofu_tech.get('title')}
+                        
+                        **CONTEXT**:
+                        - Target Audience: People at the beginning of their journey (Problem Aware).
+                        - Location: {project_loc}
+                        - Language: {project_lang}
+                        - Goal: Educate them and naturally lead them to the solution (the MoFu topic).
+                        
+                        **HIGH-OPPORTUNITY KEYWORDS**:
+                        {keyword_list}
+                        
+                        **INSTRUCTIONS**:
+                        1.  **Use Grounding**: Search Google to ensure these topics are currently relevant and not already saturated in **{project_loc}**.
+                        2.  **Focus**: "What is", "How to", "Guide to", "Benefits of", "Mistakes to Avoid".
+                        3.  **Variety**: specific angles, not just generic guides.
+                        
+                        **LOCALIZATION RULES (CRITICAL)**:
+                        1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
+                        2. **Units**: Use the measurement system standard for **{project_loc}**.
+                        3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
+                        4. **Cultural Context**: Use examples relevant to **{project_loc}**.
+                        
+                        Current Date: {datetime.datetime.now().strftime("%B %Y")}
+                        
+                        Return a JSON object with a key "topics" containing a list of objects:
+                        - "title": Topic Title (Must include a primary keyword)
+                        - "slug": URL friendly slug
+                        - "description": Brief content description (intent)
+                        - "keyword_cluster": List of ALL semantically relevant keywords from the list (aim for 30+ per topic if relevant)
+                        - "primary_keyword": The main keyword targeted
+                        """
+                        
+                        try:
+                            response = client.models.generate_content(
+                                model="gemini-2.5-flash",
+                                contents=topic_prompt,
+                                config=types.GenerateContentConfig(tools=[tool])
+                            )
+                            text = response.text.strip()
+                            if text.startswith('```json'): text = text[7:]
+                            if text.startswith('```'): text = text[3:]
+                            if text.endswith('```'): text = text[:-3]
+                            
+                            data = json.loads(text)
+                            topics = data.get('topics', [])
+                            
+                            new_pages = []
+                            for t in topics:
+                                # Map selected keywords back to their data
+                                cluster_data = []
+                                for k_str in t.get('keyword_cluster', []):
+                                    match = next((k for k in keywords if k['keyword'].lower() == k_str.lower()), None)
+                                    if match: cluster_data.append(match)
+                                    else: cluster_data.append({'keyword': k_str, 'volume': 0, 'score': 0, 'intent': 'Informational'})
+                                
+                                # Standardized Format: "keyword | intent |" (Matches MoFu style)
+                                keywords_str = '\n'.join([
+                                    f"{k['keyword']} | {k.get('intent', 'Informational')} |"
+                                    for k in cluster_data
+                                ])
+                                
+                                # Minimal research data (No Perplexity yet)
+                                topic_research = {
+                                    "stage": "topic_generated",
+                                    "keyword_cluster": cluster_data,
+                                    "primary_keyword": t.get('primary_keyword')
+                                }
+
+                                new_pages.append({
+                                    "project_id": mofu['project_id'],
+                                    "source_page_id": pid,
+                                    "url": f"{mofu['url'].rsplit('/', 1)[0]}/{t['slug']}", 
+                                    "page_type": "Topic",
+                                    "funnel_stage": "ToFu",
+                                    "product_action": "Idle", # Ready for manual "Conduct Research"
+                                    "tech_audit_data": {
+                                        "title": t['title'],
+                                        "meta_description": t['description'],
+                                        "meta_title": t['title']
+                                    },
+                                    "content_description": t['description'],
+                                    "keywords": keywords_str,
+                                    "slug": t['slug'],
+                                    "research_data": topic_research
+                                })
+                            
+                            if new_pages:
+                                print(f"Attempting to insert {len(new_pages)} ToFu topics...")
+                                insert_res = supabase.table('pages').insert(new_pages).execute()
+                                print("✓ ToFu topics inserted successfully.")
+                                
+                                # AUTO-KEYWORD RESEARCH (Gemini) - Architecture Parity with MoFu
+                                if insert_res.data:
+                                    print(f"DEBUG: Starting Auto-Keyword Research for {len(insert_res.data)} ToFu topics...")
+                                    for inserted_page in insert_res.data:
+                                        try:
+                                            p_id = inserted_page['id']
+                                            t_data = inserted_page.get('tech_audit_data', {})
+                                            if isinstance(t_data, str):
+                                                try: t_data = json.loads(t_data)
+                                                except: t_data = {}
+                                                
+                                            p_title = t_data.get('title', '')
+                                            if not p_title: continue
+                                            
+                                            log_debug(f"Auto-Researching keywords for ToFu: {p_title}")
+                                            # Use project location/language for research
+                                            gemini_result = perform_gemini_research(p_title, location=project_loc, language=project_lang)
+                                            
+                                            if gemini_result:
+                                                keywords = gemini_result.get('keywords', [])
+                                                formatted_keywords = '\n'.join([
+                                                    f"{kw.get('keyword', '')} | {kw.get('intent', 'informational')} |"
+                                                    for kw in keywords if kw.get('keyword')
+                                                ])
+                                                
+                                                # Create research data (partial)
+                                                research_data = {
+                                                    "stage": "keywords_only", 
+                                                    "mode": "hybrid",
+                                                    "competitor_urls": [c['url'] for c in gemini_result.get('competitors', [])],
+                                                    "ranked_keywords": keywords,
+                                                    "formatted_keywords": formatted_keywords
+                                                }
+                                                
+                                                supabase.table('pages').update({
+                                                    "keywords": formatted_keywords,
+                                                    "research_data": research_data
+                                                }).eq('id', p_id).execute()
+                                                log_debug(f"✓ Keywords saved for {p_title}")
+                                        except Exception as research_err:
+                                            log_debug(f"Auto-Research failed for {p_title}: {research_err}")
+                            
+                            # Update Source Page Status
+                            supabase.table('pages').update({"product_action": "ToFu Generated"}).eq('id', pid).execute()
+                            
+                        except Exception as e:
+                            print(f"Error generating ToFu topics: {e}")
+                            import traceback
+                            traceback.print_exc()
+                
                 except Exception as e:
-                    print(f"Error generating ToFu topics: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    log_debug(f"ToFu Thread Error: {e}")
+
+            # Set status to Processing immediately
+            try:
+                log_debug(f"Updating status to Processing for {page_ids}")
+                supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+            except Exception as e:
+                log_debug(f"Failed to update status to Processing: {e}")
+
+            # Start background thread
+            log_debug("Starting background ToFu thread...")
+            thread = threading.Thread(target=process_tofu_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+            thread.start()
             
-            return jsonify({"message": f"Batch action {action} completed"})
+            return jsonify({"message": "ToFu generation started in background. The status will update to 'Processing...' in the table."})
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
