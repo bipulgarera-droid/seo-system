@@ -4006,6 +4006,9 @@ def batch_update_pages():
             
             return jsonify({"message": "Content scraped successfully"})
         elif action == 'generate_content':
+            print(f"====== GENERATE CONTENT ACTION RECEIVED ======", flush=True)
+            print(f"DEBUG: Page IDs: {page_ids}", flush=True)
+            
             # Async processing to avoid timeouts
             import threading
             
@@ -4015,11 +4018,18 @@ def batch_update_pages():
                 supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
             except Exception as e:
                 log_debug(f"Failed to update status to Processing: {e}")
+                print(f"DEBUG: Failed to update status: {e}", flush=True)
 
             # Start background thread
             log_debug("Starting background thread...")
-            thread = threading.Thread(target=process_content_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
-            thread.start()
+            print(f"DEBUG: Spawning thread for process_content_generation...", flush=True)
+            try:
+                thread = threading.Thread(target=process_content_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+                thread.start()
+                print(f"DEBUG: Thread started successfully.", flush=True)
+            except Exception as thread_err:
+                print(f"DEBUG: Failed to start thread: {thread_err}", flush=True)
+                log_debug(f"Thread start failed: {thread_err}")
             
             return jsonify({"message": "Content generation started in background. The status will update to 'Processing...' in the table."})
         
