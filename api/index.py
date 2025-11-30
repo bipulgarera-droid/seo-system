@@ -3213,10 +3213,16 @@ def batch_update_pages():
                             generated_text = response.text
                             
                         elif page_type == 'Topic':
+                            log_debug("Page type is Topic, skipping to Topic logic...")
                             pass
 
+                        else:
+                            log_debug(f"WARNING: Unhandled page type: '{page_type}'")
+                            print(f"DEBUG: Unhandled page type: {page_type}", flush=True)
+
                         # SHARED LOGIC FOR PRODUCT & CATEGORY (Clean & Save)
-                        if page_type.lower() in ['product', 'category']:
+                        if page_type.lower().strip() in ['product', 'category']:
+                            log_debug(f"Saving content for {page_type}...")
                             # Clean markdown
                             if generated_text.startswith('```markdown'): generated_text = generated_text[11:]
                             if generated_text.startswith('```'): generated_text = generated_text[3:]
