@@ -3201,7 +3201,7 @@ def batch_update_pages():
 
                 # TOPIC LOGIC (MoFu/ToFu) - Now correctly placed outside the previous try/except
                 if page_type == 'Topic':
-                    print(f"DEBUG: Generating content for Topic: {page_title}")
+                    print(f"DEBUG: Generating content for Topic: {page_title}", flush=True)
                     # TOPIC PROMPT (MoFu/ToFu - COMPLETE Google 2024/2025 Compliance)
                     # Get research data for this topic
                     research_data = page.get('research_data', {})
@@ -3472,7 +3472,7 @@ def batch_update_pages():
                 
                 # SHARED EXECUTION FOR TOPIC & GENERIC PAGES
                 try:
-                    print(f"DEBUG: Calling Gemini 2.5 Pro (New SDK) for {page_title}...")
+                    print(f"DEBUG: Calling Gemini 2.5 Pro (New SDK) for {page_title}...", flush=True)
                     # Use New SDK for consistency and access to 2.5 Pro
                     response = client_with_grounding.models.generate_content(
                         model="gemini-2.5-pro",
