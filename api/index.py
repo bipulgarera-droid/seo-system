@@ -3008,10 +3008,9 @@ def batch_update_pages():
             
             def process_content_generation(page_ids, api_key):
                 log_debug(f"Background thread started for pages: {page_ids}")
-                try:
-                    # Re-initialize client inside thread to be safe
-                    client_with_grounding = genai_new.Client(api_key=api_key)
-                    tool = types.Tool(google_search=types.GoogleSearch())
+                # Re-initialize client inside thread to be safe
+                client_with_grounding = genai_new.Client(api_key=api_key)
+                tool = types.Tool(google_search=types.GoogleSearch())
                 
                 # Legacy model for Topic pages (Removed - using new SDK below)
                 # model = genai.GenerativeModel('gemini-2.0-flash-exp')
