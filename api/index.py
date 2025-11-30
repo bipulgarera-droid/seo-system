@@ -2797,16 +2797,28 @@ def scrape_page_content(url):
         import requests
         from bs4 import BeautifulSoup
         
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        }
-        response = requests.get(url, headers=headers, timeout=15)
+        # Use fetch_with_curl for robustness against bot protection
+        content, latency = fetch_with_curl(url)
         
-        if response.status_code != 200:
+        # Fallback to requests if curl fails
+        if not content:
+            print(f"DEBUG: curl failed for {url}, falling back to requests...")
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+                resp = requests.get(url, headers=headers, timeout=30)
+                if resp.status_code == 200:
+                    content = resp.text
+                    latency = resp.elapsed.total_seconds()
+                    print(f"DEBUG: requests fallback successful for {url}")
+            except Exception as req_err:
+                print(f"DEBUG: requests fallback failed: {req_err}")
+        
+        if not content:
             return None
 
-        soup = BeautifulSoup(response.content, 'html.parser')
+        soup = BeautifulSoup(content, 'html.parser')
         
         # 0. Extract Title (Before cleaning)
         page_title = None
@@ -3043,25 +3055,18 @@ def batch_update_pages():
                     existing_content = page.get('tech_audit_data', {}).get('body_content', '')
                     if not existing_content:
                         # If no body content, try to scrape it now
+                        # If no body content, try to scrape it now using robust scraper
                         try:
-                            import requests
-                            from bs4 import BeautifulSoup
-                            # Use Googlebot UA here too
-                            headers = {
-                                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
-                            }
-                            response = requests.get(page['url'], headers=headers, timeout=15)
-                            if response.status_code == 200:
-                                soup = BeautifulSoup(response.content, 'html.parser')
-                                main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=['content', 'main-content', 'post-content'])
-                                if main_content:
-                                    existing_content = main_content.get_text(separator='\n', strip=True)
-                                else:
-                                    body = soup.find('body')
-                                    if body:
-                                        for script in body(["script", "style", "nav", "footer", "header"]):
-                                            script.decompose()
-                                        existing_content = body.get_text(separator='\n', strip=True)
+                            scraped_data = scrape_page_content(page['url'])
+                            if scraped_data and scraped_data.get('body_content'):
+                                existing_content = scraped_data['body_content']
+                                # Update DB with scraped content
+                                current_tech = page.get('tech_audit_data', {})
+                                current_tech['body_content'] = existing_content
+                                supabase.table('pages').update({"tech_audit_data": current_tech}).eq('id', page_id).execute()
+                                log_debug(f"Scraped missing content for {page['url']}")
+                            else:
+                                existing_content = "No content available"
                         except Exception as e:
                             print(f"Error scraping content for {page['url']}: {e}")
                             existing_content = "No content available"
