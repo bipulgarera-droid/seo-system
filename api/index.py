@@ -36,7 +36,8 @@ CORS(app)
 def log_debug(message):
     try:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        with open("debug.log", "a") as f:
+        log_path = os.path.join(BASE_DIR, "debug.log")
+        with open(log_path, "a") as f:
             f.write(f"[{timestamp}] {message}\n")
     except Exception as e:
         print(f"Logging failed: {e}", file=sys.stderr)
@@ -47,8 +48,9 @@ log_debug("Server started/reloaded")
 @app.route('/api/get-debug-log', methods=['GET'])
 def get_debug_log():
     try:
-        if os.path.exists("debug.log"):
-            with open("debug.log", "r") as f:
+        log_path = os.path.join(BASE_DIR, "debug.log")
+        if os.path.exists(log_path):
+            with open(log_path, "r") as f:
                 # Read last 50 lines
                 lines = f.readlines()
                 return jsonify({"logs": lines[-50:]}), 200
@@ -58,7 +60,8 @@ def get_debug_log():
 
 import logging
 try:
-    logging.basicConfig(filename='backend.log', level=logging.INFO, 
+    log_path = os.path.join(BASE_DIR, 'backend.log')
+    logging.basicConfig(filename=log_path, level=logging.INFO, 
                         format='%(asctime)s %(levelname)s: %(message)s')
     logger = logging.getLogger()
 except Exception as e:
@@ -77,6 +80,10 @@ except Exception as e:
 # Configure Supabase
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+# Add delay to allow connection pool to spin up (prevents startup crashes)
+time.sleep(1)
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
 @app.route('/')
@@ -4401,7 +4408,8 @@ def run_migration():
     
     try:
         # Read the SQL file
-        with open('migration_photoshoots.sql', 'r') as f:
+        migration_path = os.path.join(BASE_DIR, 'migration_photoshoots.sql')
+        with open(migration_path, 'r') as f:
             sql = f.read()
             
         # Execute using Supabase RPC or direct SQL if possible
