@@ -3127,12 +3127,18 @@ def batch_update_pages():
     -   Keep the original formatting (H1, H2, bullets) but polished.
     """
                             # Use NEW SDK with Grounding for Products
-                            response = client_with_grounding.models.generate_content(
-                                model="gemini-2.5-pro",
-                                contents=prompt,
-                                config=types.GenerateContentConfig(tools=[tool])
-                            )
-                            generated_text = response.text
+                            print(f"DEBUG: Generating content for Product: {page_title} using gemini-2.5-pro", flush=True)
+                            try:
+                                response = client_with_grounding.models.generate_content(
+                                    model="gemini-2.5-pro",
+                                    contents=prompt,
+                                    config=types.GenerateContentConfig(tools=[tool])
+                                )
+                                generated_text = response.text
+                                print(f"DEBUG: Generation successful. Length: {len(generated_text)}", flush=True)
+                            except Exception as gen_err:
+                                print(f"DEBUG: Gemini generation failed: {gen_err}", flush=True)
+                                raise gen_err
                             
                         elif page_type.lower() == 'category':
                             # CATEGORY PROMPT (Research-Backed SEO Enhancement - Grounded + Respect Length)
