@@ -3090,10 +3090,13 @@ def batch_update_pages():
                         print(f"DEBUG: Project fetch failed: {proj_err}")
                     
                     try:
+                        log_debug(f"Checking page type for branching: '{page_type}'")
                         # BRANCHING LOGIC: Product vs Category vs Topic
-                        if page_type.lower() == 'product':
+                        if page_type and page_type.lower().strip() == 'product':
+                            log_debug("Entered Product generation block")
                             # PRODUCT PROMPT (Sales & Conversion Focused - Conservative + Grounded)
-                            prompt = f"""You are an expert E-commerce Copywriter with access to live Google Search.
+                            try:
+                                prompt = f"""You are an expert E-commerce Copywriter with access to live Google Search.
                             
     **TASK**: Polish and enhance the content for this **PRODUCT PAGE**. 
     **CRITICAL GOAL**: Improve clarity and persuasion WITHOUT changing the original length or structure significantly.
@@ -3115,7 +3118,7 @@ def batch_update_pages():
 
     **EXISTING CONTENT** (Source of Truth):
     ```
-    {existing_content[:5000]}
+    {existing_content[:5000] if existing_content else "No content"}
     ```
 
     **INSTRUCTIONS**:
@@ -3135,6 +3138,10 @@ def batch_update_pages():
     -   Include a **Meta Description** at the top.
     -   Keep the original formatting (H1, H2, bullets) but polished.
     """
+                            except Exception as prompt_err:
+                                log_debug(f"Error constructing prompt: {prompt_err}")
+                                raise prompt_err
+
                             # Use NEW SDK with Grounding for Products
                             print(f"DEBUG: Generating content for Product: {page_title} using gemini-2.5-pro", flush=True)
                             try:
