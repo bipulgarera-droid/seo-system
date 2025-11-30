@@ -3003,15 +3003,18 @@ def batch_update_pages():
             
             return jsonify({"message": "Content scraped successfully"})
         elif action == 'generate_content':
-            # Product/Category pages use NEW SDK with Grounding for SEO verification
-            # Topic pages use LEGACY SDK (no grounding needed - they have research already)
-            client_with_grounding = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            tool = types.Tool(google_search=types.GoogleSearch())
+            # Async processing to avoid timeouts
+            import threading
             
-            # Legacy model for Topic pages (Removed - using new SDK below)
-            # model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            
-            for page_id in page_ids:
+            def process_content_generation(page_ids, api_key):
+                # Re-initialize client inside thread to be safe
+                client_with_grounding = genai_new.Client(api_key=api_key)
+                tool = types.Tool(google_search=types.GoogleSearch())
+                
+                # Legacy model for Topic pages (Removed - using new SDK below)
+                # model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                
+                for page_id in page_ids:
                 # 1. Get Page Data
                 page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
                 if not page_res.data: continue
@@ -3504,9 +3507,15 @@ def batch_update_pages():
                         "tech_audit_data": current_tech_data
                     }).eq('id', page_id).execute()
                     
-                    print(f"✓ Generated improved content for {page['url']}")
+                    print(f"✓ Generated improved content for {page['url']}", flush=True)
                 except Exception as gen_error:
-                    print(f"✗ Error generating content for {page['url']}: {gen_error}")
+                    print(f"✗ Error generating content for {page['url']}: {gen_error}", flush=True)
+
+            # Start background thread
+            thread = threading.Thread(target=process_content_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
+            thread.start()
+            
+            return jsonify({"message": "Content generation started in background. Please check back in a few minutes."})
         
             return jsonify({"message": "Content generated successfully"})
 
