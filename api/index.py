@@ -2951,11 +2951,11 @@ def crawl_project_endpoint():
 def batch_update_pages():
     print(f"====== BATCH UPDATE PAGES CALLED ======", flush=True)
     log_debug("Entered batch_update_pages route")
+    log_debug(f"Entered batch_update_pages route")
     if not supabase: return jsonify({"error": "Supabase not configured"}), 500
     
     try:
-        data = request.get_json()
-        print(f"====== DATA: {data} ======", flush=True)
+        data = request.json
         log_debug(f"Received batch update data: {data}")
         page_ids = data.get('page_ids', [])
         action = data.get('action')
@@ -3007,9 +3007,11 @@ def batch_update_pages():
             import threading
             
             def process_content_generation(page_ids, api_key):
-                # Re-initialize client inside thread to be safe
-                client_with_grounding = genai_new.Client(api_key=api_key)
-                tool = types.Tool(google_search=types.GoogleSearch())
+                log_debug(f"Background thread started for pages: {page_ids}")
+                try:
+                    # Re-initialize client inside thread to be safe
+                    client_with_grounding = genai_new.Client(api_key=api_key)
+                    tool = types.Tool(google_search=types.GoogleSearch())
                 
                 # Legacy model for Topic pages (Removed - using new SDK below)
                 # model = genai.GenerativeModel('gemini-2.0-flash-exp')
@@ -3477,9 +3479,14 @@ def batch_update_pages():
                         print(f"✗ Error generating content for {page['url']}: {gen_error}", flush=True)
 
             # Set status to Processing immediately
-            supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+            try:
+                log_debug(f"Updating status to Processing for {page_ids}")
+                supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+            except Exception as e:
+                log_debug(f"Failed to update status to Processing: {e}")
 
             # Start background thread
+            log_debug("Starting background thread...")
             thread = threading.Thread(target=process_content_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
             thread.start()
             
