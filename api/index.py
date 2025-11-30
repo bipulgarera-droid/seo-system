@@ -3008,8 +3008,8 @@ def batch_update_pages():
             client_with_grounding = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
             tool = types.Tool(google_search=types.GoogleSearch())
             
-            # Legacy model for Topic pages
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Legacy model for Topic pages (Removed - using new SDK below)
+            # model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
             for page_id in page_ids:
                 # 1. Get Page Data
@@ -3469,6 +3469,8 @@ def batch_update_pages():
     -   Return the full page content in Markdown.
     -   Include a **Meta Description** at the top.
     """
+                
+                # SHARED EXECUTION FOR TOPIC & GENERIC PAGES
                 try:
                     print(f"DEBUG: Calling Gemini 2.5 Pro (New SDK) for {page_title}...")
                     # Use New SDK for consistency and access to 2.5 Pro
