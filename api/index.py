@@ -7,8 +7,8 @@ import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai  # Legacy SDK for content generation
-from google import genai as genai_new  # New SDK for Grounding
-from google.genai import types
+# from google import genai as genai_new  # Removed to avoid build issues
+# from google.genai import types # Removed to avoid build issues
 import re
 from supabase import create_client, Client
 from dotenv import load_dotenv

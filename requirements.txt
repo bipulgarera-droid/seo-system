@@ -10,4 +10,4 @@ beautifulsoup4
 lxml
 Pillow
 gunicorn
-google-genai
+
