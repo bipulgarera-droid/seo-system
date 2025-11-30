@@ -15,4 +15,5 @@ EXPOSE 3000
 
 # Command to run the application
 # Using gunicorn to serve the Flask app
-CMD ["gunicorn", "api.index:app", "--bind", "0.0.0.0:3000", "--timeout", "120"]
+# Use sh -c to allow environment variable expansion for PORT
+CMD ["sh", "-c", "gunicorn api.index:app --bind 0.0.0.0:${PORT:-3000} --timeout 120"]
