@@ -6,9 +6,14 @@ import json
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import google.generativeai as genai  # Legacy SDK for content generation
-from google import genai as genai_new  # New SDK for Grounding
-from google.genai import types
+
+# Add parent directory to path to import gemini_client
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# import google.generativeai as genai  # REMOVED: Legacy SDK
+# from google import genai as genai_new  # REMOVED: New SDK
+# from google.genai import types # REMOVED: New SDK types
+import gemini_client # NEW: Pure REST Client
 import re
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -52,13 +57,11 @@ logging.basicConfig(filename='backend.log', level=logging.INFO,
 logger = logging.getLogger()
 
 # Configure Gemini
-# Configure Gemini
-# Configure Gemini
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    # In production, this should ideally log an error or fail gracefully if the key is critical
-    pass 
-genai.configure(api_key=GEMINI_API_KEY)
+# GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# if not GEMINI_API_KEY:
+#     # In production, this should ideally log an error or fail gracefully if the key is critical
+#     pass 
+# genai.configure(api_key=GEMINI_API_KEY) # REMOVED: Legacy SDK Config
 
 # Configure Supabase
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -81,9 +84,13 @@ def dashboard():
     response.headers['Expires'] = '0'
     return response
 
+@app.route('/health')
+def health_check():
+    return "OK", 200
+
 @app.route('/api/test-ai', methods=['POST'])
 def test_ai():
-    if not GEMINI_API_KEY:
+    if not os.environ.get("GEMINI_API_KEY"):
         return jsonify({"error": "GEMINI_API_KEY not found"}), 500
 
     try:
@@ -91,9 +98,18 @@ def test_ai():
         topic = data.get('topic', 'SaaS Marketing') if data else 'SaaS Marketing'
 
         # Using the requested model which is confirmed to be available for this key
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(f"Write a short 1-sentence SEO strategy for '{topic}'.")
-        return jsonify({"strategy": response.text.strip()})
+        # model = genai.GenerativeModel('gemini-2.5-flash')
+        # response = model.generate_content(f"Write a short 1-sentence SEO strategy for '{topic}'.")
+        
+        generated_text = gemini_client.generate_content(
+            prompt=f"Write a short 1-sentence SEO strategy for '{topic}'.",
+            model_name="gemini-2.5-flash"
+        )
+        
+        if not generated_text:
+             return jsonify({"error": "Gemini generation failed"}), 500
+             
+        return jsonify({"strategy": generated_text.strip()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -582,12 +598,17 @@ def process_job():
         keywords_str = ", ".join(keywords) if keywords else "No specific ranking keywords found."
 
         # 2. Generate Audit with Gemini
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"Analyze SEO for {target_url}. It currently ranks for these top keywords: {keywords_str}. Based on this, suggest 3 new content topics."
         
-        ai_response = model.generate_content(prompt)
-        audit_result = ai_response.text.strip()
+        audit_result = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash"
+        )
+        
+        if not audit_result:
+            audit_result = "Audit generation failed."
         
         # Step D: Save (Update result and status to COMPLETED)
         supabase.table('audit_results').update({
@@ -606,7 +627,7 @@ def process_job():
 
 @app.route('/api/write-article', methods=['POST'])
 def write_article():
-    if not GEMINI_API_KEY:
+    if not os.environ.get("GEMINI_API_KEY"):
         return jsonify({"error": "GEMINI_API_KEY not found"}), 500
 
     try:
@@ -617,15 +638,22 @@ def write_article():
         if not topic:
             return jsonify({"error": "Topic is required"}), 400
 
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # model = genai.GenerativeModel('gemini-2.5-flash')
         
         system_instruction = "You are an expert SEO content writer. Write a comprehensive, engaging 1,500-word blog post about the given topic. Use H2 and H3 headers. Format in Markdown. Include a catchy title."
         
         keywords_str = ', '.join(keywords) if keywords else 'relevant SEO keywords'
         full_prompt = f"{system_instruction}\n\nTopic: {topic}\nTarget Keywords: {keywords_str}"
         
-        response = model.generate_content(full_prompt)
-        return jsonify({"content": response.text.strip()})
+        generated_text = gemini_client.generate_content(
+            prompt=full_prompt,
+            model_name="gemini-2.5-flash"
+        )
+        
+        if not generated_text:
+             return jsonify({"error": "Gemini generation failed"}), 500
+             
+        return jsonify({"content": generated_text.strip()})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -901,27 +929,48 @@ def get_projects():
             print(f"Error fetching profiles: {e}")
             profiles_map = {}
         
-        # Fetch all pages for counts (optimization)
-        try:
-            # Increase limit to avoid missing pages (default is usually 1000)
-            all_pages_res = supabase.table('pages').select('project_id, page_type').limit(10000).execute()
-            all_pages = all_pages_res.data if all_pages_res.data else []
-        except Exception as e:
-            print(f"Error fetching pages for counts: {e}")
-            all_pages = []
         
+        # Calculate counts per project (more reliable than bulk fetch with limit)
         from collections import defaultdict
         counts = defaultdict(int)
         classified_counts = defaultdict(int)
         
-        for page in all_pages:
-            pid = page.get('project_id')
-            if pid:
-                counts[pid] += 1
-                # Fix: Check for None and 'Unclassified'
-                pt = page.get('page_type')
-                if pt and pt.lower() != 'unclassified':
-                    classified_counts[pid] += 1
+        
+        # Calculate counts per project (OPTIMIZED: Batched fetch + In-memory aggregation)
+        # This avoids N+1 query problem which causes slow loading
+        from collections import defaultdict
+        counts = defaultdict(int)
+        classified_counts = defaultdict(int)
+        
+        try:
+            all_pages = []
+            has_more = True
+            offset = 0
+            limit = 5000 # Fetch in large chunks to minimize requests
+            
+            while has_more:
+                # Fetch just the columns we need
+                res = supabase.table('pages').select('project_id, page_type').range(offset, offset + limit - 1).execute()
+                batch = res.data if res.data else []
+                
+                all_pages.extend(batch)
+                
+                if len(batch) < limit:
+                    has_more = False
+                offset += limit
+                
+            # Aggregate counts
+            for page in all_pages:
+                pid = page.get('project_id')
+                if pid:
+                    counts[pid] += 1
+                    pt = page.get('page_type')
+                    if pt and pt.lower() != 'unclassified':
+                        classified_counts[pid] += 1
+                        
+        except Exception as e:
+            print(f"Error fetching pages for counts: {e}")
+            # Fallback to 0 counts if fetch fails, don't crash the whole endpoint
 
         # Merge and parse strategy plan
         final_projects = []
@@ -1311,7 +1360,7 @@ def scrape_page_details(url):
             text = soup.get_text(separator=' ')
             data['word_count'] = len(text.split())
             
-            # Click Depth (Proxy: URL Depth)
+        # Click Depth (Proxy: URL Depth)
             # Count slashes after the domain. 
             # e.g. https://domain.com/ = 0
             # https://domain.com/page = 1
@@ -1322,12 +1371,62 @@ def scrape_page_details(url):
             data['click_depth'] = 0 if not path else len(path.split('/'))
             
             # OG Tags
-            og_title = soup.find('meta', property='og:title')
-            if og_title: data['og_title'] = og_title.get('content', '').strip()
+            # Initialize with 'Missing' to allow fallback logic to work
+            data['og_title'] = 'Missing'
+            data['og_description'] = 'Missing'
+            data['og_image'] = None
+
+            og_title_tag = soup.find('meta', property='og:title') or soup.find('meta', attrs={'name': 'og:title'})
+            if og_title_tag and og_title_tag.get('content'):
+                data['og_title'] = og_title_tag['content'].strip()
             
-            og_desc = soup.find('meta', property='og:description')
-            if og_desc: data['og_description'] = og_desc.get('content', '').strip()
+            og_desc_tag = soup.find('meta', property='og:description') or soup.find('meta', attrs={'name': 'og:description'})
+            if og_desc_tag and og_desc_tag.get('content'):
+                data['og_description'] = og_desc_tag['content'].strip()
             
+            og_image_tag = soup.find('meta', property='og:image') or soup.find('meta', attrs={'name': 'og:image'})
+            if og_image_tag and og_image_tag.get('content'):
+                data['og_image'] = og_image_tag['content'].strip()
+
+            # FALLBACK: JSON-LD Schema (Common in Shopify/Wordpress if OG tags are missing/JS-rendered)
+            if data['og_title'] == 'Missing' or data['og_description'] == 'Missing' or not data['og_image']:
+                try:
+                    import json
+                    schemas = soup.find_all('script', type='application/ld+json')
+                    for schema in schemas:
+                        if not schema.string: continue
+                        try:
+                            json_data = json.loads(schema.string)
+                            # Handle list of schemas
+                            if isinstance(json_data, list):
+                                items = json_data
+                            else:
+                                items = [json_data]
+                                
+                            for item in items:
+                                # Prioritize Product, then Article, then WebPage
+                                item_type = item.get('@type', '')
+                                if isinstance(item_type, list): item_type = item_type[0] # Handle type as list
+                                
+                                if item_type in ['Product', 'Article', 'BlogPosting', 'WebPage']:
+                                    if data['og_title'] == 'Missing' and item.get('name'):
+                                        data['og_title'] = item['name']
+                                        print(f"DEBUG: Recovered OG Title from Schema ({item_type})")
+                                        
+                                    if data['og_description'] == 'Missing' and item.get('description'):
+                                        data['og_description'] = item['description']
+                                        print(f"DEBUG: Recovered OG Desc from Schema ({item_type})")
+                                        
+                                    if not data['og_image'] and item.get('image'):
+                                        img = item['image']
+                                        if isinstance(img, list): img = img[0]
+                                        elif isinstance(img, dict): img = img.get('url')
+                                        data['og_image'] = img
+                        except:
+                            continue
+                except Exception as e:
+                    print(f"DEBUG: Schema parsing failed: {e}")
+
             # Schema
             schema = soup.find('script', type='application/ld+json')
             if schema: data['has_schema'] = True
@@ -1355,7 +1454,7 @@ def scrape_page_details(url):
             data['is_4xx_code'] = 400 <= data['status_code'] < 500
             data['is_5xx_code'] = 500 <= data['status_code'] < 600
             data['is_broken'] = data['status_code'] >= 400
-            data['high_loading_time'] = data['load_time_ms'] > 2000
+            data['high_loading_time'] = data['load_time_ms'] > 30000 # Relaxed to 30s for Railway
             
             # Canonical Mismatch
             if data['canonical']:
@@ -1373,7 +1472,7 @@ def scrape_page_details(url):
         
     return data
 
-def perform_tech_audit(project_id, limit=20):
+def perform_tech_audit(project_id, limit=5):
     """Audit existing pages that are missing technical data."""
     print(f"Starting technical audit for project {project_id} (Limit: {limit})...")
     
@@ -1403,47 +1502,75 @@ def perform_tech_audit(project_id, limit=20):
     print(f"DEBUG: Found {len(unaudited_pages)} unaudited pages. Processing first {len(pages)}.")
     
     audited_count = 0
+    errors = []
     
-    for p in pages:
+    # Helper function for parallel execution
+    def audit_single_page(p):
         try:
             url = p['url']
             print(f"DEBUG: Auditing {url}...")
             
             tech_data = scrape_page_details(url)
-            print(f"DEBUG: Scraped {url}. Status: {tech_data.get('status_code')}")
+            # print(f"DEBUG: Scraped {url}. Status: {tech_data.get('status_code')}")
             
             # Merge with existing data
             existing_data = p.get('tech_audit_data') or {}
             existing_data.update(tech_data)
             
             # Update DB
-            print(f"DEBUG: Updating DB for {url}...")
+            # print(f"DEBUG: Updating DB for {url}...")
             supabase.table('pages').update({
                 'tech_audit_data': existing_data
             }).eq('id', p['id']).execute()
             
-            audited_count += 1
             print(f"DEBUG: Successfully audited {url}")
-            
+            return True, p
         except Exception as e:
             print(f"ERROR: Failed to audit {p.get('url')}: {e}")
-            import traceback
-            traceback.print_exc()
+            # Mark error in object for reporting
+            if not p.get('tech_audit_data'): p['tech_audit_data'] = {}
+            p['tech_audit_data']['error'] = str(e)
+            return False, p
+
+    # Execute sequentially (User requested efficiency/stability over speed)
+    for p in pages:
+        success, result_p = audit_single_page(p)
+        if success:
+            audited_count += 1
+        else:
+            errors.append(result_p)
         
     print(f"Audit complete. Updated {audited_count} pages.")
-    return audited_count
+    return audited_count, errors
 
 @app.route('/api/run-project-setup', methods=['POST'])
 def run_project_setup():
     if not supabase: return jsonify({"error": "Supabase not configured"}), 500
     
+    data = request.json
+    project_id = data.get('project_id')
+    do_audit = data.get('do_audit', False)
+    do_tech_audit = data.get('do_tech_audit', False)
+    do_profile = data.get('do_profile', False)
+    max_pages = data.get('max_pages', 200)
+    
+    if not project_id:
+        return jsonify({"error": "Project ID required"}), 400
+        
     try:
-        data = request.get_json()
-        project_id = data.get('project_id')
-        do_audit = data.get('do_audit', False)
-        do_tech_audit = data.get('do_tech_audit', False) # New Flag
-        do_profile = data.get('do_profile', False) # Default to False to separate actions
-        max_pages = data.get('max_pages', 200)
+        # 1. Tech Audit (Standalone)
+        if do_tech_audit:
+            count, errors = perform_tech_audit(project_id)
+            
+            msg = f"Audit complete. Updated {count} pages."
+            if count == 0 and len(errors) > 0:
+                msg += " (Check console for details)"
+                
+            return jsonify({
+                "message": msg,
+                "count": count,
+                "details": [f"Failed: {p.get('url')}" for p in errors if p.get('tech_audit_data', {}).get('error')]
+            })
 
         if not project_id: return jsonify({"error": "project_id required"}), 400
         
@@ -1461,18 +1588,28 @@ def run_project_setup():
         
         # 0. Technical Audit (Deep Dive) - NEW
         if do_tech_audit:
-             count = perform_tech_audit(project_id, limit=max_pages)
-             return jsonify({"message": f"Technical audit completed for {count} pages."})
+             print(f"[SCRAPER] Starting technical audit for project {project_id}...")
+             try:
+                 count = perform_tech_audit(project_id, limit=max_pages)
+                 print(f"[SCRAPER] ✅ Technical audit completed successfully. Audited {count} pages.")
+                 return jsonify({"message": f"Technical audit completed for {count} pages.", "pages_audited": count})
+             except Exception as audit_error:
+                 error_msg = f"Technical audit failed: {str(audit_error)}"
+                 print(f"[SCRAPER] ❌ ERROR: {error_msg}")
+                 import traceback
+                 traceback.print_exc()
+                 return jsonify({"error": error_msg}), 500
+
 
         # 1. Research Business (The Brain)
         if do_profile:
             print("Starting Gemini research...")
-            try:
-                tools = [{'google_search': {}}]
-                model = genai.GenerativeModel('gemini-2.0-flash-exp', tools=tools)
-            except:
-                print("Warning: Google Search tool failed. Using standard model.")
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # try:
+            #     tools = [{'google_search': {}}]
+            #     model = genai.GenerativeModel('gemini-2.0-flash-exp', tools=tools)
+            # except:
+            #     print("Warning: Google Search tool failed. Using standard model.")
+            #     model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
             prompt = f"""
             You are an expert business analyst. Research the website {domain} and create a comprehensive Business Profile.
@@ -1501,11 +1638,17 @@ def run_project_setup():
             }}
             """
             
-            response = model.generate_content(prompt)
+            text = gemini_client.generate_content(
+                prompt=prompt,
+                model_name="gemini-2.5-flash",
+                use_grounding=True
+            )
+            
+            if not text:
+                raise Exception("Gemini generation failed for Business Profile")
             
             # Parse JSON
             import json
-            text = response.text.strip()
             if text.startswith('```json'): text = text[7:]
             if text.startswith('```'): text = text[3:]
             if text.endswith('```'): text = text[:-3]
@@ -1529,8 +1672,12 @@ def run_project_setup():
             
             Return a short markdown summary of the strategy.
             """
-            strategy_res = model.generate_content(strategy_prompt)
-            strategy_plan = strategy_res.text
+            strategy_plan = gemini_client.generate_content(
+                prompt=strategy_prompt,
+                model_name="gemini-2.5-flash",
+                use_grounding=True
+            )
+            if not strategy_plan: strategy_plan = ""
             
             # Save Business Profile
             # WORKAROUND: Append Strategy Plan to Business Summary for persistence
@@ -1600,12 +1747,13 @@ def run_project_setup():
                         batch = new_pages[i:i+batch_size]
                         supabase.table('pages').insert(batch).execute()
                     
-                #3. Update project page_count field
-                total_pages = supabase.table('pages').select('*', count='exact').eq('project_id', project_id).execute()
-                supabase.table('projects').update({
-                    'page_count': total_pages.count
-                }).eq('id', project_id).execute()
-                print(f"Updated project page_count to {total_pages.count}")
+                #3. Update project page_count field (DISABLED - column doesn't exist in schema)
+                # total_pages = supabase.table('pages').select('*', count='exact').eq('project_id', project_id).execute()
+                # supabase.table('projects').update({
+                #     'page_count': total_pages.count
+                # }).eq('id', project_id).execute()
+                # print(f"Updated project page_count to {total_pages.count}")
+                print(f"Inserted {len(new_pages)} new pages successfully.")
         else:
             print("Audit disabled. Skipping crawl.")
                 
@@ -1671,11 +1819,25 @@ def generate_funnel():
         ]
         """
         
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+        # model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+        
+        text = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=True
+        )
+        
+        if not text:
+            raise Exception("Gemini generation failed for Content Strategy")
+            
+        # Clean markdown
+        if text.startswith('```json'): text = text[7:]
+        if text.startswith('```'): text = text[3:]
+        if text.endswith('```'): text = text[:-3]
         
         # 3. Parse and Save
-        ideas = json.loads(response.text)
+        ideas = json.loads(text.strip())
         
         # 4. Enrich with DataForSEO (Optional)
         try:
@@ -1935,10 +2097,9 @@ def perform_gemini_research(topic, location="US", language="English"):
     log_debug(f"Starting Gemini Free Research for: {topic} (Loc: {location}, Lang: {language})")
     
     try:
-        # Use new google-genai SDK with Grounding (FIXED!)
-        client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        tool = types.Tool(google_search=types.GoogleSearch())
 
+        # Use gemini_client for pure REST API calls (No SDK)
+        
         prompt = f"""
         Research the SEO topic: "{topic}"
         
@@ -1968,16 +2129,16 @@ def perform_gemini_research(topic, location="US", language="English"):
             ]
         }}
         """
-        # NOTE: Cannot use response_mime_type="application/json" with Tools (Grounding)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                tools=[tool]
-            )
+        
+        text = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=True
         )
         
-        text = response.text
+        if not text:
+            raise Exception("Empty response from Gemini REST API")
+        
         # Clean markdown code blocks if present
         if text.startswith('```json'): text = text[7:]
         if text.startswith('```'): text = text[3:]
@@ -2474,30 +2635,25 @@ def generate_image_endpoint():
         # To avoid conflict, let's just use the prompt directly for now to ensure image gen works, 
         # or use the new client for text generation too.
         
-        # Let's use the new client for image generation.
-        from google import genai
-        from google.genai import types
-        import base64
-        
-        # Assuming GEMINI_API_KEY is set as an environment variable or globally
-        GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-        if not GEMINI_API_KEY:
-            return jsonify({"error": "GEMINI_API_KEY not configured"}), 500
+        UPLOAD_FOLDER = os.path.join('public', 'uploads')
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        output_filename = f"gen_{uuid.uuid4()}.png"
+        output_path = os.path.join(UPLOAD_FOLDER, output_filename)
         
         print(f"Generating image for prompt: {prompt}")
         
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-image",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"],
-                image_config=types.ImageConfig(
-                    aspect_ratio="16:9"
-                )
-            )
+        result_path = gemini_client.generate_image(
+            prompt=prompt,
+            output_path=output_path,
+            model_name="gemini-2.5-flash-image"
         )
+        
+        if not result_path:
+            raise Exception("Gemini Image API failed")
+            
+        # Continue with existing logic (which expects output_filename)
+        # We need to ensure the file exists at output_path, which generate_image does.
         
         UPLOAD_FOLDER = os.path.join('public', 'uploads')
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -2595,10 +2751,18 @@ def write_article_v2():
         """
         
         # 3. Generate
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        response = model.generate_content(prompt)
+        # model = genai.GenerativeModel('gemini-2.0-flash-exp')
         
-        content = response.text
+        text = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash",
+            use_grounding=True
+        )
+        
+        if not text:
+            raise Exception("Gemini generation failed for Content Strategy")
+        
+        content = text
         
         # Return content ONLY (No auto-save)
         return jsonify({
@@ -2683,44 +2847,22 @@ def generate_image():
         
         print(f"Generating image with Gemini 2.5 Flash Image for prompt: {prompt[:100]}...")
         
-        # Use Gemini 2.5 Flash Image model as requested
-        model = genai.GenerativeModel('gemini-2.5-flash-image')
+        # Use gemini_client
+        UPLOAD_FOLDER = os.path.join('public', 'generated_images')
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        filename = f"gen_{int(time.time())}_{uuid.uuid4()}.png"
+        output_path = os.path.join(UPLOAD_FOLDER, filename)
         
-        response = model.generate_content(prompt)
+        result_path = gemini_client.generate_image(
+            prompt=prompt,
+            output_path=output_path,
+            model_name="gemini-2.5-flash-image"
+        )
         
-        # Check if we have a valid response
-        if not response or not response.parts:
-            raise Exception("No content returned from image generation model")
-
-        for part in response.parts:
-            if hasattr(part, 'inline_data'):
-                print("Found inline_data in response!")
-                import base64
-                from PIL import Image
-                import io
-                
-                # Decode base64 image
-                image_data = base64.b64decode(part.inline_data.data)
-                image = Image.open(io.BytesIO(image_data))
-                
-                # Ensure directory exists
-                output_dir = os.path.join(os.getcwd(), 'public', 'generated_images')
-                os.makedirs(output_dir, exist_ok=True)
-                
-                filename = f"img_{int(time.time())}.png"
-                filepath = os.path.join(output_dir, filename)
-                
-                # Save the image
-                image.save(filepath, 'PNG')
-                
-                print(f"Image saved to: {filepath}")
-                
-                # Return URL relative to public root
-                return jsonify({"image_url": f"/generated_images/{filename}"})
-        
-        # If we get here, no image was found in parts
-        print(f"No image found in response parts. Response text: {response.text if hasattr(response, 'text') else 'No text'}")
-        raise Exception("Model returned content but no image data found.")
+        if not result_path:
+            raise Exception("Gemini Image API failed")
+            
+        return jsonify({"image_url": f"/generated_images/{filename}"})
 
     except Exception as e:
         error_msg = f"Image generation failed: {str(e)}"
@@ -2824,7 +2966,8 @@ def scrape_page_content(url):
         
         body_content = ""
         try:
-            extract_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+            # extract_model = genai.GenerativeModel('gemini-2.0-flash-exp')
             extraction_prompt = f"""
             You are a strict Content Extraction Robot.
             
@@ -2849,8 +2992,15 @@ def scrape_page_content(url):
             HTML Snippet: {cleaned_html}
             """
             
-            llm_response = extract_model.generate_content(extraction_prompt)
-            body_content = llm_response.text.strip()
+            body_content = gemini_client.generate_content(
+                prompt=extraction_prompt,
+                model_name="gemini-2.5-flash"
+            )
+            
+            if not body_content:
+                raise Exception("Gemini extraction failed")
+                
+            body_content = body_content.strip()
             body_content = body_content.replace('```markdown', '').replace('```', '').strip()
             
         except Exception as e:
@@ -2960,13 +3110,13 @@ def batch_update_pages():
             
             return jsonify({"message": "Content scraped successfully"})
         elif action == 'generate_content':
-            # Product/Category pages use NEW SDK with Grounding for SEO verification
-            # Topic pages use LEGACY SDK (no grounding needed - they have research already)
-            client_with_grounding = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            tool = types.Tool(google_search=types.GoogleSearch())
+            # Product/Category pages use gemini_client for SEO verification
+            # Topic pages use gemini_client (no grounding needed - they have research already)
+            # client_with_grounding = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY")) # REMOVED
+            # tool = types.Tool(google_search=types.GoogleSearch()) # REMOVED
             
             # Legacy model for Topic pages
-            model = genai.GenerativeModel('gemini-2.5-pro')
+            # model = genai.GenerativeModel('gemini-2.5-pro') # REMOVED
             
             for page_id in page_ids:
                 # 1. Get Page Data
@@ -3056,13 +3206,15 @@ def batch_update_pages():
 -   Include a **Meta Description** at the top.
 -   Keep the original formatting (H1, H2, bullets) but polished.
 """
-                        # Use NEW SDK with Grounding for Products
-                        response = client_with_grounding.models.generate_content(
-                            model="gemini-2.5-pro",
-                            contents=prompt,
-                            config=types.GenerateContentConfig(tools=[tool])
+                        # Use gemini_client for Products
+                        generated_text = gemini_client.generate_content(
+                            prompt=prompt,
+                            model_name="gemini-2.5-pro",
+                            use_grounding=True
                         )
-                        generated_text = response.text
+                        
+                        if not generated_text:
+                            raise Exception("Empty response from Gemini REST API")
                         
                     elif page_type.lower() == 'category':
                         # CATEGORY PROMPT (Research-Backed SEO Enhancement - Grounded + Respect Length)
@@ -3112,13 +3264,15 @@ def batch_update_pages():
 -   Return the full page content in Markdown.
 -   Include a **Meta Description** at the top.
 """
-                        # Use NEW SDK with Grounding for Categories too
-                        response = client_with_grounding.models.generate_content(
-                            model="gemini-2.5-pro",
-                            contents=prompt,
-                            config=types.GenerateContentConfig(tools=[tool])
+                        # Use gemini_client for Categories
+                        generated_text = gemini_client.generate_content(
+                            prompt=prompt,
+                            model_name="gemini-2.5-pro",
+                            use_grounding=True
                         )
-                        generated_text = response.text
+                        
+                        if not generated_text:
+                            raise Exception("Empty response from Gemini REST API")
                         
                     elif page_type == 'Topic':
                         # ... (Topic logic starts here, but we need to close the previous block first)
@@ -3425,8 +3579,14 @@ def batch_update_pages():
     -   Include a **Meta Description** at the top.
     """
                 try:
-                    response = model.generate_content(prompt)
-                    generated_text = response.text
+                    # Use gemini_client for Topics/Generic
+                    generated_text = gemini_client.generate_content(
+                        prompt=prompt,
+                        model_name="gemini-2.5-pro"
+                    )
+                    
+                    if not generated_text:
+                        raise Exception("Empty response from Gemini REST API")
                     
                     # Clean markdown
                     if generated_text.startswith('```markdown'): generated_text = generated_text[11:]
@@ -3463,10 +3623,10 @@ def batch_update_pages():
             log_debug(f"GENERATE_MOFU: Starting for {len(page_ids)} pages")
             print(f"DEBUG: Received generate_mofu action for page_ids: {page_ids}")
             print(f"DEBUG: Received generate_mofu action for page_ids: {page_ids}")
-            # Use new google-genai SDK with Grounding (ENABLED!)
+            # Use gemini_client with Grounding (ENABLED!)
             # This helps verify that the topic angles are actually trending/relevant.
-            client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            tool = types.Tool(google_search=types.GoogleSearch())
+            # client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY")) # REMOVED
+            # tool = types.Tool(google_search=types.GoogleSearch()) # REMOVED
             
             for pid in page_ids:
                 print(f"DEBUG: Processing page_id: {pid}")
@@ -3557,12 +3717,16 @@ Examples:
 OUTPUT: Return ONLY a comma-separated list of 3-5 broad keywords. No explanations.
 Example output: carrier oil benefits, oil for skin, facial oils, natural oils"""
                     
-                    seed_res = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=context_prompt,
-                        config=types.GenerateContentConfig(tools=[tool])
+                    seed_res_text = gemini_client.generate_content(
+                        prompt=context_prompt,
+                        model_name="gemini-2.5-flash",
+                        use_grounding=True
                     )
-                    seeds_str = seed_res.text.strip().replace('"', '').replace("'", "")
+                    
+                    if not seed_res_text:
+                        raise Exception("Empty response for seed generation")
+                        
+                    seeds_str = seed_res_text.strip().replace('"', '').replace("'", "")
                     broad_seeds = [s.strip() for s in seeds_str.split(',') if s.strip()]
                     
                     # Fallback if AI fails
@@ -3666,12 +3830,16 @@ CRITICAL:
 
                 
                 try:
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=topic_prompt,
-                        config=types.GenerateContentConfig(tools=[tool])
+                    text = gemini_client.generate_content(
+                        prompt=topic_prompt,
+                        model_name="gemini-2.5-flash",
+                        use_grounding=True
                     )
-                    text = response.text.strip()
+                    
+                    if not text:
+                        raise Exception("Empty response from Gemini REST API")
+                        
+                    text = text.strip()
                     if text.startswith('```json'): text = text[7:]
                     if text.startswith('```'): text = text[3:]
                     if text.endswith('```'): text = text[:-3]
@@ -3919,9 +4087,9 @@ CRITICAL:
 
         elif action == 'generate_tofu':
             # AI ToFu Topic Generation
-            # Use new google-genai SDK with Grounding (ENABLED!)
-            client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            tool = types.Tool(google_search=types.GoogleSearch())
+            # Use gemini_client with Grounding (ENABLED!)
+            # client = genai_new.Client(api_key=os.environ.get("GEMINI_API_KEY")) # REMOVED
+            # tool = types.Tool(google_search=types.GoogleSearch()) # REMOVED
             
             for pid in page_ids:
                 # Fetch Source MoFu Page
@@ -4013,12 +4181,16 @@ CRITICAL:
                 """
                 
                 try:
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=topic_prompt,
-                        config=types.GenerateContentConfig(tools=[tool])
+                    text = gemini_client.generate_content(
+                        prompt=topic_prompt,
+                        model_name="gemini-2.5-flash",
+                        use_grounding=True
                     )
-                    text = response.text.strip()
+                    
+                    if not text:
+                        raise Exception("Empty response from Gemini REST API")
+                        
+                    text = text.strip()
                     if text.startswith('```json'): text = text[7:]
                     if text.startswith('```'): text = text[3:]
                     if text.endswith('```'): text = text[:-3]
@@ -4180,10 +4352,18 @@ def generate_image_prompt():
         Return ONLY the prompt text. No "Here is the prompt" or quotes.
         """
         
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        response = model.generate_content(prompt)
+        # model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # response = model.generate_content(prompt)
         
-        return jsonify({"prompt": response.text.strip()})
+        text = gemini_client.generate_content(
+            prompt=prompt,
+            model_name="gemini-2.5-flash"
+        )
+        
+        if not text:
+            return jsonify({"error": "Gemini generation failed"}), 500
+            
+        return jsonify({"prompt": text.strip()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -4299,57 +4479,65 @@ def update_photoshoot(photoshoot_id):
             supabase.table('photoshoots').update({'status': 'Processing'}).eq('id', photoshoot_id).execute()
             
             try:
-                content_parts = [prompt_text]
+                # content_parts = [prompt_text]
+                input_image_b64 = None
                 
                 # Load input image if it exists
                 if input_image_url:
                     try:
                         img = load_image_data(input_image_url)
-                        content_parts.append(img)
+                        # Convert PIL Image to Base64
+                        import io
+                        import base64
+                        buffered = io.BytesIO()
+                        img.save(buffered, format="JPEG")
+                        input_image_b64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                        # content_parts.append(img)
                     except Exception as e:
                         print(f"Error loading input image: {e}")
                         # Continue without image or fail? Fail seems safer for user expectation
                         return jsonify({"error": f"Failed to load input image: {str(e)}"}), 400
                 
                 print(f"Generating image with prompt: {prompt_text} and image: {bool(input_image_url)}")
-                # Generate image using Gemini model
-                image_model = genai.GenerativeModel('gemini-2.5-flash-image')
-                response = image_model.generate_content(content_parts)
-                
-                print("Generation response received")
                 
                 # Save image to Supabase
                 filename = f"gen_{photoshoot_id}_{int(time.time())}.png"
                 
-                # Handle response data
-                image_data = None
-                if hasattr(response, 'parts'):
-                    for part in response.parts:
-                        if part.inline_data:
-                            image_data = part.inline_data.data
-                            break
+                # Generate image using gemini_client
+                # We need a temporary path for the output
+                UPLOAD_FOLDER = os.path.join('public', 'generated_images')
+                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+                temp_output_path = os.path.join(UPLOAD_FOLDER, filename)
                 
-                if not image_data and hasattr(response, 'candidates'):
-                     # Fallback check
-                     if response.candidates and response.candidates[0].content.parts:
-                         image_data = response.candidates[0].content.parts[0].inline_data.data
-
-                if not image_data:
-                    raise Exception("No image data found in response")
-
-                # Upload to Supabase
-                public_url = upload_to_supabase(image_data, filename)
-                print(f"Image saved to {public_url}")
+                result_path = gemini_client.generate_image(
+                    prompt=prompt_text,
+                    output_path=temp_output_path,
+                    model_name="gemini-2.5-flash-image",
+                    input_image_data=input_image_b64
+                )
                 
-                # Update database
-                update_data['status'] = 'Done'
-                update_data['output_image'] = public_url
+                if not result_path:
+                    raise Exception("Gemini Image API failed")
                 
-            except Exception as img_error:
-                print(f"Image generation error: {img_error}")
-                traceback.print_exc()
-                update_data['status'] = 'Failed'
-                # Don't return error immediately, update status first
+                # Read the generated image data
+                with open(result_path, 'rb') as f:
+                    image_data = f.read()
+                
+                # Upload to Supabase Storage
+                public_url = upload_to_supabase(image_data, filename, bucket_name='photoshoots')
+                
+                # Update task with output image URL
+                supabase.table('photoshoots').update({
+                    'status': 'Completed', 
+                    'output_image': public_url
+                }).eq('id', photoshoot_id).execute()
+                
+                return jsonify({"message": "Image generated successfully", "url": public_url})
+                
+            except Exception as e:
+                print(f"Generation error: {e}")
+                supabase.table('photoshoots').update({'status': 'Failed'}).eq('id', photoshoot_id).execute()
+                return jsonify({"error": str(e)}), 500
 
         elif action == 'upscale':
             print(f"Starting upscale for task {photoshoot_id}")
@@ -4373,47 +4561,57 @@ def update_photoshoot(photoshoot_id):
                 print(f"Loading image for upscale from: {output_image_url}")
                 img = load_image_data(output_image_url)
                 
+                # Convert to base64
+                import io
+                import base64
+                buffered = io.BytesIO()
+                img.save(buffered, format="JPEG")
+                input_image_b64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                
                 upscale_prompt = "Generate a high resolution, 4k, highly detailed, photorealistic version of this image. Maintain the exact composition and details but improve quality and sharpness."
                 
-                content_parts = [upscale_prompt, img]
+                # content_parts = [upscale_prompt, img]
                 
                 print(f"Generating upscale...")
-                # Generate image using Gemini model
-                image_model = genai.GenerativeModel('gemini-2.5-flash-image')
-                response = image_model.generate_content(content_parts)
+                # Generate image using gemini_client
+                
+                filename = f"enhanced_{photoshoot_id}_{int(time.time())}.png"
+                UPLOAD_FOLDER = os.path.join('public', 'generated_images')
+                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+                temp_output_path = os.path.join(UPLOAD_FOLDER, filename)
+                
+                result_path = gemini_client.generate_image(
+                    prompt=upscale_prompt,
+                    output_path=temp_output_path,
+                    model_name="gemini-2.5-flash-image",
+                    input_image_data=input_image_b64
+                )
+                
+                if not result_path:
+                    raise Exception("Gemini Upscale failed")
                 
                 print("Upscale response received")
                 
-                # Save image to Supabase
-                filename = f"enhanced_{photoshoot_id}_{int(time.time())}.png"
+                # Read the generated image data
+                with open(result_path, 'rb') as f:
+                    image_data = f.read()
                 
-                # Handle response data
-                image_data = None
-                if hasattr(response, 'parts'):
-                    for part in response.parts:
-                        if part.inline_data:
-                            image_data = part.inline_data.data
-                            break
+                # Upload to Supabase Storage
+                public_url = upload_to_supabase(image_data, filename, bucket_name='photoshoots')
                 
-                if not image_data and hasattr(response, 'candidates'):
-                     if response.candidates and response.candidates[0].content.parts:
-                         image_data = response.candidates[0].content.parts[0].inline_data.data
+                # Update task
+                supabase.table('photoshoots').update({
+                    'status': 'Completed', 
+                    'output_image': public_url
+                }).eq('id', photoshoot_id).execute()
+                
+                return jsonify({"message": "Image upscaled successfully", "url": public_url})
 
-                if not image_data:
-                    raise Exception("No image data found in response")
+            except Exception as e:
+                print(f"Upscale error: {e}")
+                supabase.table('photoshoots').update({'status': 'Failed'}).eq('id', photoshoot_id).execute()
+                return jsonify({"error": str(e)}), 500
 
-                # Upload to Supabase
-                public_url = upload_to_supabase(image_data, filename)
-                print(f"Enhanced image saved to {public_url}")
-                
-                # Update database
-                update_data['status'] = 'Done'
-                update_data['enhanced_output'] = public_url
-                
-            except Exception as img_error:
-                print(f"Upscale error: {img_error}")
-                traceback.print_exc()
-                update_data['status'] = 'Failed'
                 
         # Update the task with final status
         if update_data: # Ensure there's data to update before executing

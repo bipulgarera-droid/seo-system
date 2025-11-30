@@ -2626,3 +2626,105 @@ DEBUG: Processing https://www.sugarcosmetics.com/products/grand-finale-matte-set
 DEBUG: MATCH! https://www.sugarcosmetics.com/products/grand-finale-matte-setting-mist-1 -> Product
 DEBUG: Processing https://www.sugarcosmetics.com/products/kohl-of-honour-intense-kajal-04-true-blue-navy-blue | Type: None
 DEBUG: MATCH! https://www.sugarcosmetics.com/products/kohl-of-honour-intense-kajal-04-true-blue-navy-blue -> Product
+DEBUG: ENTERING auto_classify
+DEBUG: Total pages: 271. Unclassified: 211. Processing batch of: 50
+DEBUG: Processing https://www.maccosmetics.in/returns | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/returns
+DEBUG: Processing https://www.maccosmetics.in/explore-connect-in-colour-eye-shadow-palettes | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/explore-connect-in-colour-eye-shadow-palettes
+DEBUG: Processing https://www.maccosmetics.in/our-story | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/our-story
+DEBUG: Processing https://www.maccosmetics.in/deals | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/deals
+DEBUG: Processing https://www.maccosmetics.in/privacy-policy | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/privacy-policy
+DEBUG: Processing https://www.maccosmetics.in/offer-details | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/offer-details
+DEBUG: Processing https://www.maccosmetics.in/back-to-mac | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/back-to-mac
+DEBUG: Processing https://www.maccosmetics.in/product/softpoint-sponge-applicator | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/softpoint-sponge-applicator -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/eye-kohl | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/eye-kohl -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/dazzleshadow-extreme | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/dazzleshadow-extreme -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/studio-radiance-moisturizing-illuminating-silky-primer | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/studio-radiance-moisturizing-illuminating-silky-primer -> Product
+DEBUG: Processing https://www.maccosmetics.in/viva-glam | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/viva-glam
+DEBUG: Processing https://www.maccosmetics.in/product/m-a-c-lash-80-romantic-lash | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/m-a-c-lash-80-romantic-lash -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/mineralize-timecheck-lotion | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/mineralize-timecheck-lotion -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/studio-fix-pro-set-blur-weightless-loose-powder | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/studio-fix-pro-set-blur-weightless-loose-powder -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/m-a-cstack-mascara-mini-m-a-c | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/m-a-cstack-mascara-mini-m-a-c -> Product
+DEBUG: Processing https://www.maccosmetics.in/products/face/makeup-setting-sprays | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/products/face/makeup-setting-sprays -> Product
+DEBUG: Processing https://www.maccosmetics.in/customer-service-faq | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/customer-service-faq
+DEBUG: Processing https://www.maccosmetics.in/product/lipglass-clear | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/lipglass-clear -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/prep-prime-lip | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/prep-prime-lip -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/full-lash-curler | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/full-lash-curler -> Product
+DEBUG: Processing https://www.maccosmetics.in/products/wedding-season-looks | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/products/wedding-season-looks -> Product
+DEBUG: Processing https://www.maccosmetics.in/mac-trend/blue-makeup | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/mac-trend/blue-makeup -> Category
+DEBUG: Processing https://www.maccosmetics.in/product/m-a-c-lash-36-dreamgirl-lash | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/m-a-c-lash-36-dreamgirl-lash -> Product
+DEBUG: Processing https://www.maccosmetics.in/products/removers-cleansers | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/products/removers-cleansers -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/dazzleshadow | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/dazzleshadow -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/270-synthetic-mini-rounded-slant-brush | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/270-synthetic-mini-rounded-slant-brush -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/duo-adhesive | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/duo-adhesive -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/fix-magic-radiance | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/fix-magic-radiance -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/m-a-cximal-sleek-satin-lipstick | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/m-a-cximal-sleek-satin-lipstick -> Product
+DEBUG: Processing https://www.maccosmetics.in/products/lips/lip-palettes-kits | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/products/lips/lip-palettes-kits -> Product
+DEBUG: Processing https://www.maccosmetics.in/products/lips/lip-gloss | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/products/lips/lip-gloss -> Product
+DEBUG: Processing https://www.maccosmetics.in/write-a-review | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/write-a-review
+DEBUG: Processing https://www.maccosmetics.in/product/209-synthetic-eye-liner-brush | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/209-synthetic-eye-liner-brush -> Product
+DEBUG: Processing https://www.maccosmetics.in/products/gifts/gifts-under-3000 | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/products/gifts/gifts-under-3000 -> Product
+DEBUG: Processing https://www.maccosmetics.in/macstack | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/macstack
+DEBUG: Processing https://www.maccosmetics.in/sales | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/sales
+DEBUG: Processing https://www.maccosmetics.in/mac-trend | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/mac-trend -> Category
+DEBUG: Processing https://www.maccosmetics.in/foundation-shade-finder | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/foundation-shade-finder
+DEBUG: Processing https://www.maccosmetics.in/shipping | Type: None
+DEBUG: NO MATCH for https://www.maccosmetics.in/shipping
+DEBUG: Processing https://www.maccosmetics.in/mac-artistry | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/mac-artistry -> Category
+DEBUG: Processing https://www.maccosmetics.in/product/prep-prime-fix-matte | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/prep-prime-fix-matte -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/lustreglass-sheer-shine-lipstick | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/lustreglass-sheer-shine-lipstick -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/pencil-sharpener-universal | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/pencil-sharpener-universal -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/lipglass-air | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/lipglass-air -> Product
+DEBUG: Processing https://www.maccosmetics.in/mac-trend/60s-makeup-looks | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/mac-trend/60s-makeup-looks -> Category
+DEBUG: Processing https://www.maccosmetics.in/product/170-synthetic-rounded-slant-brush | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/170-synthetic-rounded-slant-brush -> Product
+DEBUG: Processing https://www.maccosmetics.in/product/extended-play-gigablack-lash-mascara | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/extended-play-gigablack-lash-mascara -> Product
+DEBUG: Processing https://www.maccosmetics.in/mac-trend/teddy-makeup | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/mac-trend/teddy-makeup -> Category
+DEBUG: Processing https://www.maccosmetics.in/product/connect-in-colour-eye-shadow-palette-hi-fi-colour | Type: None
+DEBUG: MATCH! https://www.maccosmetics.in/product/connect-in-colour-eye-shadow-palette-hi-fi-colour -> Product

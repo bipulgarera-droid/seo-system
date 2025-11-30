@@ -2480,3 +2480,161 @@ However, the only keyw
 [2025-11-30 02:17:51] Entered batch_update_pages route
 [2025-11-30 02:17:51] Received batch update data: {'page_ids': ['3fd02ce2-d85c-4ad5-b022-fa31f8779f92'], 'action': 'generate_content'}
 [2025-11-30 02:22:49] Server started/reloaded
+[2025-11-30 09:21:48] Entered batch_update_pages route
+[2025-11-30 09:21:48] Entered batch_update_pages route
+[2025-11-30 09:21:48] Received batch update data: {'page_ids': ['004cf9cf-0620-43b9-9516-b524f7bba4e3'], 'action': 'generate_content'}
+[2025-11-30 09:21:48] Updating status to Processing for ['004cf9cf-0620-43b9-9516-b524f7bba4e3']
+[2025-11-30 09:21:48] Starting background thread...
+[2025-11-30 09:21:48] Background thread started for pages: ['004cf9cf-0620-43b9-9516-b524f7bba4e3']
+[2025-11-30 09:21:49] Fetching project settings for 3d258982-b6ca-401c-b3b5-06f0c2444cad...
+[2025-11-30 09:21:50] Project settings: Loc=IN, Lang=English
+[2025-11-30 09:21:50] Checking page type for branching: 'Product'
+[2025-11-30 09:21:50] Entered Product generation block
+[2025-11-30 09:22:17] Saving content for Product...
+[2025-11-30 09:30:35] Server started/reloaded
+[2025-11-30 09:32:24] Server started/reloaded
+[2025-11-30 09:35:05] Entered batch_update_pages route
+[2025-11-30 09:35:05] Received batch update data: {'page_ids': ['004cf9cf-0620-43b9-9516-b524f7bba4e3'], 'action': 'generate_content'}
+[2025-11-30 09:36:11] Entered batch_update_pages route
+[2025-11-30 09:36:11] Received batch update data: {'page_ids': ['03600065-514f-42fa-be68-ea5e26fb5107'], 'action': 'scrape_content'}
+[2025-11-30 09:36:16] Entered batch_update_pages route
+[2025-11-30 09:36:16] Received batch update data: {'page_ids': ['03600065-514f-42fa-be68-ea5e26fb5107'], 'action': 'scrape_content'}
+[2025-11-30 09:36:33] Entered batch_update_pages route
+[2025-11-30 09:36:33] Received batch update data: {'page_ids': ['07566ceb-727f-4fe0-84d4-549fab3b7dc1'], 'action': 'conduct_research'}
+[2025-11-30 09:36:33] CONDUCT_RESEARCH: Starting for 1 pages
+[2025-11-30 09:36:33] Researching topic (Perplexity): MAC 82 Seductress Lash: Price, Discounts & Where to Buy Online in India (2025)
+[2025-11-30 09:36:34] Starting Perplexity Research for brief (Loc: IN)...
+[2025-11-30 09:36:34] research_with_perplexity called (Loc: IN, Lang: English)
+[2025-11-30 09:36:34] Perplexity API key found: pplx-qSlw9...
+[2025-11-30 09:36:34] Calling Perplexity API with query: 
+                    Research Topic: MAC 82 Seduct...
+[2025-11-30 09:37:50] Perplexity response status: 200
+[2025-11-30 09:37:50] ✓ Perplexity success! 4 citations
+[2025-11-30 09:37:52] Research complete for MAC 82 Seductress Lash: Price, Discounts & Where to Buy Online in India (2025)
+[2025-11-30 09:38:02] Entered batch_update_pages route
+[2025-11-30 09:38:02] Received batch update data: {'page_ids': ['07566ceb-727f-4fe0-84d4-549fab3b7dc1'], 'action': 'conduct_research'}
+[2025-11-30 09:38:02] CONDUCT_RESEARCH: Starting for 1 pages
+[2025-11-30 09:38:03] Researching topic (Perplexity): MAC 82 Seductress Lash: Price, Discounts & Where to Buy Online in India (2025)
+[2025-11-30 09:38:03] Starting Perplexity Research for brief (Loc: IN)...
+[2025-11-30 09:38:03] research_with_perplexity called (Loc: IN, Lang: English)
+[2025-11-30 09:38:03] Perplexity API key found: pplx-qSlw9...
+[2025-11-30 09:38:03] Calling Perplexity API with query: 
+                    Research Topic: MAC 82 Seduct...
+[2025-11-30 09:38:12] Perplexity response status: 200
+[2025-11-30 09:38:12] ✓ Perplexity success! 3 citations
+[2025-11-30 09:38:13] Research complete for MAC 82 Seductress Lash: Price, Discounts & Where to Buy Online in India (2025)
+[2025-11-30 09:38:17] Entered batch_update_pages route
+[2025-11-30 09:38:17] Received batch update data: {'page_ids': ['07566ceb-727f-4fe0-84d4-549fab3b7dc1'], 'action': 'generate_content'}
+[2025-11-30 09:47:58] Entered batch_update_pages route
+[2025-11-30 09:47:58] Received batch update data: {'page_ids': ['07566ceb-727f-4fe0-84d4-549fab3b7dc1'], 'action': 'generate_content'}
+[2025-11-30 10:03:08] Entered batch_update_pages route
+[2025-11-30 10:03:08] Received batch update data: {'page_ids': ['734e45f5-be3e-46ee-9301-ca51044b0025'], 'action': 'conduct_research'}
+[2025-11-30 10:03:08] CONDUCT_RESEARCH: Starting for 1 pages
+[2025-11-30 10:03:10] Researching topic (Perplexity): How to Apply False Eyelashes Perfectly: A Beginner-Friendly Tutorial for Indian Users
+[2025-11-30 10:03:10] Starting Perplexity Research for brief (Loc: IN)...
+[2025-11-30 10:03:10] research_with_perplexity called (Loc: IN, Lang: English)
+[2025-11-30 10:03:10] Perplexity API key found: pplx-qSlw9...
+[2025-11-30 10:03:10] Calling Perplexity API with query: 
+                    Research Topic: How to Apply ...
+[2025-11-30 10:04:14] Perplexity response status: 200
+[2025-11-30 10:04:14] ✓ Perplexity success! 3 citations
+[2025-11-30 10:04:17] Research complete for How to Apply False Eyelashes Perfectly: A Beginner-Friendly Tutorial for Indian Users
+[2025-11-30 10:40:06] Server started/reloaded
+[2025-11-30 10:40:52] Server started/reloaded
+[2025-11-30 10:53:24] Entered batch_update_pages route
+[2025-11-30 10:53:24] Received batch update data: {'page_ids': ['03600065-514f-42fa-be68-ea5e26fb5107'], 'action': 'scrape_content'}
+[2025-11-30 10:53:33] Entered batch_update_pages route
+[2025-11-30 10:53:33] Received batch update data: {'page_ids': ['152a587c-f4c8-464a-8ab0-9de3e46c8e27'], 'action': 'scrape_content'}
+[2025-11-30 11:05:56] Server started/reloaded
+[2025-11-30 11:13:34] Server started/reloaded
+[2025-11-30 11:22:44] Server started/reloaded
+[2025-11-30 11:25:56] Server started/reloaded
+[2025-11-30 11:27:31] DEBUG: classify_page received data: {'page_id': '00b595a6-a76c-4fb8-a0c2-8f142c41c404', 'funnel_stage': 'Category'}
+[2025-11-30 11:27:31] DEBUG: Updating page_type to Category for 00b595a6-a76c-4fb8-a0c2-8f142c41c404
+[2025-11-30 11:27:38] Entered batch_update_pages route
+[2025-11-30 11:27:38] Received batch update data: {'page_ids': ['00b595a6-a76c-4fb8-a0c2-8f142c41c404'], 'action': 'scrape_content'}
+[2025-11-30 11:28:02] Entered batch_update_pages route
+[2025-11-30 11:28:02] Received batch update data: {'page_ids': ['00b595a6-a76c-4fb8-a0c2-8f142c41c404'], 'action': 'generate_content'}
+[2025-11-30 11:31:28] DEBUG: classify_page received data: {'page_id': '00e432cd-c193-46bf-8e46-b74aca7d89d1', 'funnel_stage': 'Product'}
+[2025-11-30 11:31:28] DEBUG: Updating page_type to Product for 00e432cd-c193-46bf-8e46-b74aca7d89d1
+[2025-11-30 11:31:35] Entered batch_update_pages route
+[2025-11-30 11:31:35] Received batch update data: {'page_ids': ['00e432cd-c193-46bf-8e46-b74aca7d89d1'], 'action': 'scrape_content'}
+[2025-11-30 11:32:14] Entered batch_update_pages route
+[2025-11-30 11:32:14] Received batch update data: {'page_ids': ['00e432cd-c193-46bf-8e46-b74aca7d89d1'], 'action': 'generate_content'}
+[2025-11-30 11:34:00] Entered batch_update_pages route
+[2025-11-30 11:34:00] Received batch update data: {'page_ids': ['00e432cd-c193-46bf-8e46-b74aca7d89d1'], 'action': 'generate_mofu'}
+[2025-11-30 11:34:00] GENERATE_MOFU: Starting for 1 pages
+[2025-11-30 11:34:02] Using Product Title: Moisturizers
+[2025-11-30 11:34:06] Generated 4 broad seeds: ['face moisturizer', 'moisturizer with spf', 'daily moisturizer', 'hydrating moisturizer']
+[2025-11-30 11:34:06] Calling perform_gemini_research as PRIMARY source
+[2025-11-30 11:34:06] Starting Gemini Free Research for: Moisturizers (Loc: US, Lang: English)
+[2025-11-30 11:34:30] Skipping deep research (will be done in 'Conduct Research' stage).
+[2025-11-30 11:34:54] Auto-Researching keywords for: The Best Moisturizers for Every Skin Type & Concern in 2025 (Loc: US)
+[2025-11-30 11:34:54] Starting Gemini Free Research for: The Best Moisturizers for Every Skin Type & Concern in 2025 (Loc: US, Lang: English)
+[2025-11-30 11:35:16] ✓ Keywords saved for The Best Moisturizers for Every Skin Type & Concern in 2025
+[2025-11-30 11:35:16] Auto-Researching keywords for: How to Choose the Right Moisturizer: A Complete Guide for Your Skin (Loc: US)
+[2025-11-30 11:35:16] Starting Gemini Free Research for: How to Choose the Right Moisturizer: A Complete Guide for Your Skin (Loc: US, Lang: English)
+[2025-11-30 11:35:34] ✓ Keywords saved for How to Choose the Right Moisturizer: A Complete Guide for Your Skin
+[2025-11-30 11:35:34] Auto-Researching keywords for: SPF, Anti-Aging, & Natural: A Guide to Specialized Moisturizers (Loc: US)
+[2025-11-30 11:35:34] Starting Gemini Free Research for: SPF, Anti-Aging, & Natural: A Guide to Specialized Moisturizers (Loc: US, Lang: English)
+[2025-11-30 11:35:57] ✓ Keywords saved for SPF, Anti-Aging, & Natural: A Guide to Specialized Moisturizers
+[2025-11-30 11:35:57] Auto-Researching keywords for: Moisturizer Before or After Serum? Your Complete Application Guide (Loc: US)
+[2025-11-30 11:35:57] Starting Gemini Free Research for: Moisturizer Before or After Serum? Your Complete Application Guide (Loc: US, Lang: English)
+[2025-11-30 11:36:13] ✓ Keywords saved for Moisturizer Before or After Serum? Your Complete Application Guide
+[2025-11-30 11:36:13] Auto-Researching keywords for: The Best Moisturizers for Men in 2025: Hydration & Skincare Solutions (Loc: US)
+[2025-11-30 11:36:13] Starting Gemini Free Research for: The Best Moisturizers for Men in 2025: Hydration & Skincare Solutions (Loc: US, Lang: English)
+[2025-11-30 11:36:34] ✓ Keywords saved for The Best Moisturizers for Men in 2025: Hydration & Skincare Solutions
+[2025-11-30 11:36:34] Auto-Researching keywords for: Cream vs. Gel vs. Lotion: Understanding Moisturizer Formulations & Ingredients (Loc: US)
+[2025-11-30 11:36:34] Starting Gemini Free Research for: Cream vs. Gel vs. Lotion: Understanding Moisturizer Formulations & Ingredients (Loc: US, Lang: English)
+[2025-11-30 11:36:48] ✓ Keywords saved for Cream vs. Gel vs. Lotion: Understanding Moisturizer Formulations & Ingredients
+[2025-11-30 11:37:28] Entered batch_update_pages route
+[2025-11-30 11:37:28] Received batch update data: {'page_ids': ['0e4ba09d-199d-4c81-966a-3b91ea0e6b39'], 'action': 'conduct_research'}
+[2025-11-30 11:37:28] CONDUCT_RESEARCH: Starting for 1 pages
+[2025-11-30 11:37:30] Researching topic (Perplexity): Cream vs. Gel vs. Lotion: Understanding Moisturizer Formulations & Ingredients
+[2025-11-30 11:37:30] Starting Perplexity Research for brief (Loc: US)...
+[2025-11-30 11:37:30] research_with_perplexity called (Loc: US, Lang: English)
+[2025-11-30 11:37:30] Perplexity API key found: pplx-qSlw9...
+[2025-11-30 11:37:30] Calling Perplexity API with query: 
+                    Research Topic: Cream vs. Gel...
+[2025-11-30 11:39:15] Perplexity response status: 200
+[2025-11-30 11:39:15] ✓ Perplexity success! 8 citations
+[2025-11-30 11:39:16] Research complete for Cream vs. Gel vs. Lotion: Understanding Moisturizer Formulations & Ingredients
+[2025-11-30 11:41:05] Entered batch_update_pages route
+[2025-11-30 11:41:05] Received batch update data: {'page_ids': ['0e4ba09d-199d-4c81-966a-3b91ea0e6b39'], 'action': 'generate_content'}
+[2025-11-30 11:44:08] Entered batch_update_pages route
+[2025-11-30 11:44:08] Received batch update data: {'page_ids': ['0e4ba09d-199d-4c81-966a-3b91ea0e6b39'], 'action': 'generate_tofu'}
+[2025-11-30 11:44:09] Starting Gemini Free Research for: Cream vs. Gel vs. Lotion: Understanding Moisturizer Formulations & Ingredients (Loc: US, Lang: English)
+[2025-11-30 11:45:00] Auto-Researching keywords for ToFu: How to Choose the Right Moisturizer for Your Skin Type: A Beginner's Guide
+[2025-11-30 11:45:00] Starting Gemini Free Research for: How to Choose the Right Moisturizer for Your Skin Type: A Beginner's Guide (Loc: US, Lang: English)
+[2025-11-30 11:45:20] ✓ Keywords saved for How to Choose the Right Moisturizer for Your Skin Type: A Beginner's Guide
+[2025-11-30 11:45:20] Auto-Researching keywords for ToFu: Gel vs. Cream vs. Lotion: A Simple Guide to Moisturizer Textures
+[2025-11-30 11:45:20] Starting Gemini Free Research for: Gel vs. Cream vs. Lotion: A Simple Guide to Moisturizer Textures (Loc: US, Lang: English)
+[2025-11-30 11:45:34] ✓ Keywords saved for Gel vs. Cream vs. Lotion: A Simple Guide to Moisturizer Textures
+[2025-11-30 11:45:34] Auto-Researching keywords for ToFu: 7 Common Moisturizer Mistakes Harming Your Skin (and How to Fix Them)
+[2025-11-30 11:45:34] Starting Gemini Free Research for: 7 Common Moisturizer Mistakes Harming Your Skin (and How to Fix Them) (Loc: US, Lang: English)
+[2025-11-30 11:45:57] ✓ Keywords saved for 7 Common Moisturizer Mistakes Harming Your Skin (and How to Fix Them)
+[2025-11-30 11:45:57] Auto-Researching keywords for ToFu: Seasonal Skincare: Your Guide to Choosing the Best Moisturizer for Summer & Winter in the US
+[2025-11-30 11:45:57] Starting Gemini Free Research for: Seasonal Skincare: Your Guide to Choosing the Best Moisturizer for Summer & Winter in the US (Loc: US, Lang: English)
+[2025-11-30 11:46:15] ✓ Keywords saved for Seasonal Skincare: Your Guide to Choosing the Best Moisturizer for Summer & Winter in the US
+[2025-11-30 11:46:15] Auto-Researching keywords for ToFu: Moisturizer Ingredients Explained: What to Look for in Your Hydrating Formula
+[2025-11-30 11:46:15] Starting Gemini Free Research for: Moisturizer Ingredients Explained: What to Look for in Your Hydrating Formula (Loc: US, Lang: English)
+[2025-11-30 11:46:46] ✓ Keywords saved for Moisturizer Ingredients Explained: What to Look for in Your Hydrating Formula
+[2025-11-30 11:47:03] Entered batch_update_pages route
+[2025-11-30 11:47:03] Received batch update data: {'page_ids': ['06c36231-c61d-4003-b8f6-0a62679057dc'], 'action': 'conduct_research'}
+[2025-11-30 11:47:03] CONDUCT_RESEARCH: Starting for 1 pages
+[2025-11-30 11:47:05] Researching topic (Perplexity): Seasonal Skincare: Your Guide to Choosing the Best Moisturizer for Summer & Winter in the US
+[2025-11-30 11:47:05] Starting Perplexity Research for brief (Loc: US)...
+[2025-11-30 11:47:05] research_with_perplexity called (Loc: US, Lang: English)
+[2025-11-30 11:47:05] Perplexity API key found: pplx-qSlw9...
+[2025-11-30 11:47:05] Calling Perplexity API with query: 
+                    Research Topic: Seasonal Skin...
+[2025-11-30 11:47:50] Perplexity response status: 200
+[2025-11-30 11:47:50] ✓ Perplexity success! 4 citations
+[2025-11-30 11:48:00] Research complete for Seasonal Skincare: Your Guide to Choosing the Best Moisturizer for Summer & Winter in the US
+[2025-11-30 11:48:54] Entered batch_update_pages route
+[2025-11-30 11:48:54] Received batch update data: {'page_ids': ['06c36231-c61d-4003-b8f6-0a62679057dc'], 'action': 'generate_content'}
+[2025-11-30 11:56:18] Server started/reloaded
+[2025-11-30 11:57:06] Server started/reloaded
+[2025-11-30 12:04:22] Server started/reloaded
+[2025-11-30 12:12:54] Server started/reloaded
+[2025-11-30 12:22:06] Server started/reloaded

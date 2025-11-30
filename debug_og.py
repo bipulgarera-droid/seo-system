@@ -1,25 +1,38 @@
-import requests
+import subprocess
 from bs4 import BeautifulSoup
 
-url = "https://newvisiondigital.in/about-us"
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-}
+def fetch_with_curl(url):
+    try:
+        cmd = ['curl', '-L', '-s', 
+               '-A', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+               url]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        return result.stdout
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
 
-try:
-    res = requests.get(url, headers=headers, timeout=10)
-    print(f"Status: {res.status_code}")
-    soup = BeautifulSoup(res.content, 'html.parser')
+url = "https://supergoop.com/products/100-mineral-sunscreen-stick"
+print(f"Fetching {url}...")
+html = fetch_with_curl(url)
+
+if html:
+    soup = BeautifulSoup(html, 'html.parser')
     
     og_title = soup.find('meta', property='og:title')
-    print(f"OG Title (property): {og_title.get('content') if og_title else 'Not Found'}")
+    print(f"OG Title (property='og:title'): {og_title}")
     
     og_desc = soup.find('meta', property='og:description')
-    print(f"OG Desc (property): {og_desc.get('content') if og_desc else 'Not Found'}")
+    print(f"OG Desc (property='og:description'): {og_desc}")
     
-    # Check for name attribute just in case
+    # Check for name attribute variant
     og_title_name = soup.find('meta', attrs={'name': 'og:title'})
-    print(f"OG Title (name): {og_title_name.get('content') if og_title_name else 'Not Found'}")
+    print(f"OG Title (name='og:title'): {og_title_name}")
 
-except Exception as e:
-    print(f"Error: {e}")
+    # Print first 500 chars of head to see what's there
+    head = soup.find('head')
+    if head:
+        print("\nHead content snippet:")
+        print(head.decode_contents()[:1000])
+else:
+    print("Failed to fetch HTML")
