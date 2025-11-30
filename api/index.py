@@ -21,10 +21,14 @@ import io
 import mimetypes
 
 load_dotenv('.env.local')
-# Use absolute path for static folder
+# Remove static_folder config entirely to avoid any startup path issues
+# We are serving files manually in home() and dashboard()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Remove static_url_path='' to avoid conflict with root route
-app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'public'))
+app = Flask(__name__)
+
+@app.route('/ping')
+def ping():
+    return "pong", 200
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0 # Disable cache for development
 CORS(app)
 
