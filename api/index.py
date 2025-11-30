@@ -3015,163 +3015,439 @@ def batch_update_pages():
                 # model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 
                 for page_id in page_ids:
-                # 1. Get Page Data
-                page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
-                if not page_res.data: continue
-                page = page_res.data
-                
-                # 2. Get existing content
-                existing_content = page.get('tech_audit_data', {}).get('body_content', '')
-                if not existing_content:
-                    # If no body content, try to scrape it now
+                    # 1. Get Page Data
+                    page_res = supabase.table('pages').select('*').eq('id', page_id).single().execute()
+                    if not page_res.data: continue
+                    page = page_res.data
+                    
+                    # 2. Get existing content
+                    existing_content = page.get('tech_audit_data', {}).get('body_content', '')
+                    if not existing_content:
+                        # If no body content, try to scrape it now
+                        try:
+                            import requests
+                            from bs4 import BeautifulSoup
+                            # Use Googlebot UA here too
+                            headers = {
+                                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+                            }
+                            response = requests.get(page['url'], headers=headers, timeout=15)
+                            if response.status_code == 200:
+                                soup = BeautifulSoup(response.content, 'html.parser')
+                                main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=['content', 'main-content', 'post-content'])
+                                if main_content:
+                                    existing_content = main_content.get_text(separator='\n', strip=True)
+                                else:
+                                    body = soup.find('body')
+                                    if body:
+                                        for script in body(["script", "style", "nav", "footer", "header"]):
+                                            script.decompose()
+                                        existing_content = body.get_text(separator='\n', strip=True)
+                        except Exception as e:
+                            print(f"Error scraping content for {page['url']}: {e}")
+                            existing_content = "No content available"
+                    
+                    # 3. Generate improved content
+                    page_title = page.get('tech_audit_data', {}).get('title', page.get('url', ''))
+                    page_type = page.get('page_type', 'page')
+
+                    # Fetch Project Settings for Localization
+                    project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+                    project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
+                    project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                    
                     try:
-                        import requests
-                        from bs4 import BeautifulSoup
-                        # Use Googlebot UA here too
-                        headers = {
-                            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
-                        }
-                        response = requests.get(page['url'], headers=headers, timeout=15)
-                        if response.status_code == 200:
-                            soup = BeautifulSoup(response.content, 'html.parser')
-                            main_content = soup.find('main') or soup.find('article') or soup.find('div', class_=['content', 'main-content', 'post-content'])
-                            if main_content:
-                                existing_content = main_content.get_text(separator='\n', strip=True)
-                            else:
-                                body = soup.find('body')
-                                if body:
-                                    for script in body(["script", "style", "nav", "footer", "header"]):
-                                        script.decompose()
-                                    existing_content = body.get_text(separator='\n', strip=True)
-                    except Exception as e:
-                        print(f"Error scraping content for {page['url']}: {e}")
-                        existing_content = "No content available"
-                
-                # 3. Generate improved content
-                page_title = page.get('tech_audit_data', {}).get('title', page.get('url', ''))
-                page_type = page.get('page_type', 'page')
+                        # BRANCHING LOGIC: Product vs Category vs Topic
+                        if page_type.lower() == 'product':
+                            # PRODUCT PROMPT (Sales & Conversion Focused - Conservative + Grounded)
+                            prompt = f"""You are an expert E-commerce Copywriter with access to live Google Search.
+                            
+    **TASK**: Polish and enhance the content for this **PRODUCT PAGE**. 
+    **CRITICAL GOAL**: Improve clarity and persuasion WITHOUT changing the original length or structure significantly.
 
-                # Fetch Project Settings for Localization
-                project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
-                project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
-                
-                try:
-                    # BRANCHING LOGIC: Product vs Category vs Topic
-                    if page_type.lower() == 'product':
-                        # PRODUCT PROMPT (Sales & Conversion Focused - Conservative + Grounded)
-                        prompt = f"""You are an expert E-commerce Copywriter with access to live Google Search.
+    **CONTEXT**:
+    - Target Audience Location: {project_loc}
+    - Target Language: {project_lang}
+
+    **LOCALIZATION RULES (CRITICAL)**:
+    1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
+    2. **Units**: Use the measurement system standard for **{project_loc}**.
+    3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
+    4. **Cultural Context**: Use examples relevant to **{project_loc}**.
+
+    **PAGE DETAILS**:
+    - URL: {page['url']}
+    - Title: {page_title}
+    - Product Name: {page_title}
+
+    **EXISTING CONTENT** (Source of Truth):
+    ```
+    {existing_content[:5000]}
+    ```
+
+    **INSTRUCTIONS**:
+    1.  **Refine, Don't Reinvent**: Keep the original structure (paragraphs, bullets, sections). Only fix what is broken or unclear.
+    2.  **Respect Length**: The output should be roughly the same length as the original (+/- 10%). Do NOT add long "fluff" sections about industry trends unless they were already there.
+    3.  **Persuasion**: Make the existing text more punchy and benefit-driven.
+    4.  **STRICT ACCURACY**: 
+        -   **DO NOT CHANGE** technical specs, ingredients, dimensions, or "What's Inside".
+        -   **DO NOT INVENT** features.
+    5.  **Competitive Intelligence** (USE GROUNDING):
+        -   Search for similar products to understand competitive positioning
+        -   Verify any comparative claims ("best", "top-rated") against live data
+        -   Identify unique selling points vs competitors
+
+    **OUTPUT FORMAT** (Markdown):
+    -   Return the full page content in Markdown.
+    -   Include a **Meta Description** at the top.
+    -   Keep the original formatting (H1, H2, bullets) but polished.
+    """
+                            # Use NEW SDK with Grounding for Products
+                            response = client_with_grounding.models.generate_content(
+                                model="gemini-2.5-pro",
+                                contents=prompt,
+                                config=types.GenerateContentConfig(tools=[tool])
+                            )
+                            generated_text = response.text
+                            
+                        elif page_type.lower() == 'category':
+                            # CATEGORY PROMPT (Research-Backed SEO Enhancement - Grounded + Respect Length)
+                            prompt = f"""You are an expert E-commerce Copywriter & SEO Specialist.
+
+    **TASK**: Enhance this **CATEGORY/COLLECTION PAGE** using real-time search data.
+    **CRITICAL GOAL**: infuse the content with high-value SEO keywords and competitive insights while respecting the original length and structure.
+
+    **CONTEXT**:
+    - Target Audience Location: {project_loc}
+    - Target Language: {project_lang}
+
+    **LOCALIZATION RULES (CRITICAL)**:
+    1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
+    2. **Units**: Use the measurement system standard for **{project_loc}**.
+    3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
+    4. **Cultural Context**: Use examples relevant to **{project_loc}**.
+
+    **PAGE DETAILS**:
+    - URL: {page['url']}
+    - Category Title: {page_title}
+
+    **EXISTING CONTENT** (Source of Truth):
+    ```
+    {existing_content[:5000]}
+    ```
+
+    **INSTRUCTIONS**:
+    1.  **Research First (USE GROUNDING)**:
+        -   Search for top-ranking competitors for "{page_title}" in **{project_loc}**.
+        -   Identify the **primary intent** (e.g., "buy cheap", "luxury", "guide") and align the copy.
+        -   Find 3-5 **semantic keywords** competitors are using that are missing here.
+
+    2.  **Enhance & Optimize (The "Better" Part)**:
+        -   Rewrite the existing text to include these new keywords naturally.
+        -   Improve the value proposition based on what competitors offer.
+        -   Make it **better SEO-wise**: clearer headings, stronger hook, better keyword density.
+
+    3.  **Respect Constraints**:
+        -   **Length**: Keep it roughly the same length (+/- 10%). Do NOT add massive new sections (like FAQs) unless the original had them.
+        -   **Structure**: Maintain the existing flow (Intro -> Products -> Outro).
+
+    4.  **Meta Description**:
+        -   Write a new, high-CTR Meta Description (150-160 chars).
+
+    **OUTPUT FORMAT** (Markdown):
+    -   Return the full page content in Markdown.
+    -   Include a **Meta Description** at the top.
+    """
+                            # Use NEW SDK with Grounding for Categories too
+                            response = client_with_grounding.models.generate_content(
+                                model="gemini-2.5-pro",
+                                contents=prompt,
+                                config=types.GenerateContentConfig(tools=[tool])
+                            )
+                            generated_text = response.text
+                            
+                        elif page_type == 'Topic':
+                            pass
+
+                        # SHARED LOGIC FOR PRODUCT & CATEGORY (Clean & Save)
+                        if page_type.lower() in ['product', 'category']:
+                            # Clean markdown
+                            if generated_text.startswith('```markdown'): generated_text = generated_text[11:]
+                            if generated_text.startswith('```'): generated_text = generated_text[3:]
+                            if generated_text.endswith('```'): generated_text = generated_text[:-3]
+                            
+                            # Extract Meta Description
+                            meta_desc = None
+                            import re
+                            match = re.search(r'\*\*Meta Description\*\*:\s*(.*?)(?:\n|$)', generated_text)
+                            if match:
+                                meta_desc = match.group(1).strip()
+                            
+                            # Update tech_audit_data with new meta description
+                            current_tech_data = page.get('tech_audit_data') or {}
+                            if meta_desc:
+                                current_tech_data['meta_description'] = meta_desc
+                            
+                            # 4. Update DB
+                            supabase.table('pages').update({
+                                "content": generated_text.strip(),
+                                "product_action": "Idle", # Reset action
+                                "tech_audit_data": current_tech_data
+                            }).eq('id', page_id).execute()
+                            
+                            print(f"✓ Generated improved content for {page['url']}", flush=True)
+                            continue # Skip the rest of the loop for Product/Category
+
+                    except Exception as gen_error:
+                        print(f"✗ Error generating content for {page['url']}: {gen_error}", flush=True)
+
+                    # TOPIC LOGIC (MoFu/ToFu) - Now correctly placed outside the previous try/except
+                    if page_type == 'Topic':
+                        print(f"DEBUG: Generating content for Topic: {page_title}", flush=True)
+                        # TOPIC PROMPT (MoFu/ToFu - COMPLETE Google 2024/2025 Compliance)
+                        # Get research data for this topic
+                        research_data = page.get('research_data', {})
+                        keyword_cluster = research_data.get('keyword_cluster', [])
+                        primary_keyword = research_data.get('primary_keyword', page_title)
+                        perplexity_research = research_data.get('perplexity_research', '')
+                        citations = research_data.get('citations', [])
+                        funnel_stage = page.get('funnel_stage', '')
+                        source_page_id = page.get('source_page_id')
                         
-**TASK**: Polish and enhance the content for this **PRODUCT PAGE**. 
-**CRITICAL GOAL**: Improve clarity and persuasion WITHOUT changing the original length or structure significantly.
+                        # Get source/related pages for internal linking
+                        internal_links = []
+                        
+                        if source_page_id:
+                            try:
+                                # 1. Fetch Parent (MoFu or Product)
+                                parent_res = supabase.table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', source_page_id).single().execute()
+                                if parent_res.data:
+                                    parent = parent_res.data
+                                    parent_title = parent.get('tech_audit_data', {}).get('title', parent.get('url'))
+                                    
+                                    # Link to Parent
+                                    if funnel_stage == 'MoFu':
+                                        internal_links.append(f"- {parent_title} (Main Product): {parent['url']}")
+                                    elif funnel_stage == 'ToFu':
+                                        internal_links.append(f"- {parent_title} (In-Depth Guide): {parent['url']}")
+                                        
+                                        # 2. Fetch Grandparent (Product) for ToFu
+                                        grandparent_id = parent.get('source_page_id')
+                                        if grandparent_id:
+                                            gp_res = supabase.table('pages').select('url, tech_audit_data').eq('id', grandparent_id).single().execute()
+                                            if gp_res.data:
+                                                gp_title = gp_res.data.get('tech_audit_data', {}).get('title', gp_res.data.get('url'))
+                                                internal_links.append(f"- {gp_title} (Main Product): {gp_res.data['url']}")
+        
+                            except Exception as e:
+                                print(f"Error fetching internal links: {e}")
+                        
+                        print(f"DEBUG: Internal Links for {page_title}: {internal_links}")
+                        links_str = '\n'.join(internal_links) if internal_links else "No internal links available"
+                                
+                        # Format keywords for prompt
+                        if keyword_cluster:
+                            kw_list = '\n'.join([f"- {kw['keyword']} ({kw['volume']}/mo, Score: {kw.get('score', 0)})" for kw in keyword_cluster[:15]])
+                        else:
+                            kw_list = f"- {primary_keyword}"
+                        
+                        # Format citations
+                        citations_str = '\n'.join([f"[{i+1}] {cite}" for i, cite in enumerate(citations[:10])]) if citations else "No citations available"
+                        
+                        prompt = f"""You are an expert SEO Content Writer following **Google's Complete Search Documentation** (2024/2025):
+        - Google Search Essentials
+        - SEO Starter Guide  
+        - Creating Helpful, Reliable, People-First Content
+        - E-E-A-T Quality Rater Guidelines
+        
+        **ARTICLE TYPE**: {funnel_stage} Content
+        **TOPIC**: {page_title}
 
-**CONTEXT**:
-- Target Audience Location: {project_loc}
-- Target Language: {project_lang}
+    **CONTEXT**:
+    - Target Audience Location: {project_loc}
+    - Target Language: {project_lang}
 
-**LOCALIZATION RULES (CRITICAL)**:
-1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
-2. **Units**: Use the measurement system standard for **{project_loc}**.
-3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
-4. **Cultural Context**: Use examples relevant to **{project_loc}**.
-
-**PAGE DETAILS**:
-- URL: {page['url']}
-- Title: {page_title}
-- Product Name: {page_title}
-
-**EXISTING CONTENT** (Source of Truth):
-```
-{existing_content[:5000]}
-```
-
-**INSTRUCTIONS**:
-1.  **Refine, Don't Reinvent**: Keep the original structure (paragraphs, bullets, sections). Only fix what is broken or unclear.
-2.  **Respect Length**: The output should be roughly the same length as the original (+/- 10%). Do NOT add long "fluff" sections about industry trends unless they were already there.
-3.  **Persuasion**: Make the existing text more punchy and benefit-driven.
-4.  **STRICT ACCURACY**: 
-    -   **DO NOT CHANGE** technical specs, ingredients, dimensions, or "What's Inside".
-    -   **DO NOT INVENT** features.
-5.  **Competitive Intelligence** (USE GROUNDING):
-    -   Search for similar products to understand competitive positioning
-    -   Verify any comparative claims ("best", "top-rated") against live data
-    -   Identify unique selling points vs competitors
-
-**OUTPUT FORMAT** (Markdown):
--   Return the full page content in Markdown.
--   Include a **Meta Description** at the top.
--   Keep the original formatting (H1, H2, bullets) but polished.
-"""
-                        # Use NEW SDK with Grounding for Products
+    **LOCALIZATION RULES (CRITICAL)**:
+    1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India, £ GBP for UK, € EUR for Europe). Convert any research prices (like $) to the local currency using approximate current rates.
+    2. **Units**: Use the measurement system standard for **{project_loc}**.
+    3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India, "Color" for US).
+    4. **Cultural Context**: Use examples and references relevant to **{project_loc}**.
+        
+        **TARGET KEYWORDS** (DataForSEO Validated):
+        {kw_list}
+        
+        **VERIFIED RESEARCH** (Perplexity with Citations):
+        {perplexity_research[:3000]}
+        
+        **REQUIRED INTERNAL LINKS** (Critical for SEO):
+        {links_str}
+        
+        **Sources to Cite**:
+        {citations_str}
+        
+        ---
+        
+        **GOOGLE'S MANDATORY REQUIREMENTS** (2024/2025):
+        
+        **1. E-E-A-T Framework (Quality Rater Guidelines)**:
+        - **Experience**: Demonstrate first-hand knowledge, testing, or real-world usage
+        - **Expertise**: Show subject matter authority with detailed, technical insights
+        - **Authoritativeness**: Cite authoritative sources (use Perplexity citations above)
+        - **Trustworthiness**: Fact-check all claims, cite sources, admit limitations/uncertainty
+        
+        **2. Helpful Content Principles (Post-March 2024 Core Update)**:
+        - Answer search intent DIRECTLY in first paragraph (no fluff intro)
+        - Provide ORIGINAL insights beyond obvious information
+        - Include SPECIFIC data/statistics with sources [numbered citations]
+        - Write for people, not search engines
+        - Demonstrate expertise through depth and nuance
+        - Avoid mass-produced, generic content patterns
+        
+        **3. SEO Starter Guide Essentials**:
+        - **Title**: Descriptive, unique, includes primary keyword (avoid clickbait)
+        - **Meta Description**: 150-160 chars, benefit-driven, actionable
+        - **Headings**: Clear H2/H3 hierarchy matching user questions
+        - **Internal Linking**: Link to ALL provided internal URLs naturally in content
+        - **Content Quality**: Substantial, complete, comprehensive (NOT thin or superficial)
+        - **Mobile-First**: Scannable structure (bullets, short paragraphs)
+        
+        **4. Featured Snippet Optimization**:
+        - Provide direct, concise answer in first 2-3 sentences
+        - Use "Quick Answer" section with 3-5 bullet points
+        - Structure content to answer "who, what, when, where, why, how"
+        
+        **5. Structured Data Readiness** (FAQ Schema):
+        - Include FAQ section with 3-5 common questions
+        - Format: ### Question / Direct answer (40-50 words)
+        - Questions should match "People Also Ask" intent
+        
+        **6. GEO (Generative Engine Optimization) Strategy**:
+        - **Definition Syntax**: Use clear "X is Y" sentences for core concepts (AI models quote these).
+        - **Data Tables**: AI LOVES structured data. If comparing items, YOU MUST USE A MARKDOWN TABLE.
+        - **Quotable Insights**: Include short, punchy statements that summarize complex ideas.
+        - **Direct Answers**: Ensure the "Quick Answer" section is self-contained and fact-heavy.
+        
+        **7. RESEARCH INTEGRATION (CRITICAL)**:
+        - The **VERIFIED RESEARCH** section above contains a detailed outline and key insights.
+        - **ADAPT THE STRUCTURE**: The structure below is a template. You MUST modify the H2/H3 headings to match the high-quality outline provided in the research if it offers better depth.
+        - **USE THE DATA**: Incorporate specific stats, facts, and examples from the research.
+        
+        """
+                        # Only add Review Standards for comparison/review topics
+                        if any(x in page_title.lower() for x in ['best', 'vs', 'review', 'comparison', 'top']):
+                            prompt += """
+        **7. High-Quality Review Standards** (MANDATORY for this topic):
+        - Include specific Pros/Cons lists
+        - Provide quantitative measurements/metrics where possible
+        - Explain *how* things were tested or evaluated
+        - Focus on unique features/drawbacks not found in manufacturer specs
+        """
+                        
+                        prompt += f"""
+        ---
+        
+        **INTERNAL LINKING STRATEGY** ({'MoFu → Product/Pillar' if funnel_stage == 'MoFu' else 'ToFu → MoFu + Product'}):
+        
+        **MANDATORY**: You MUST link to all provided internal links naturally within the content.
+        
+        **CRITICAL: MAIN PRODUCT LINKING**:
+        - You MUST link to the **MAIN PRODUCT** (if provided in the list) at least TWICE:
+        1. Once in the **first 30%** of the article (e.g., as a recommended solution/tool).
+        2. Once in the **Conclusion**.
+        - Do NOT be spammy. Make it helpful.
+        
+        **How to Link**:
+        - MoFu articles: Link to product/pillar pages in context (e.g., "If you're interested in [product name], check out our full review")
+        - ToFu articles: Link to MoFu articles AND product pages
+        - Use contextual anchor text (not "click here")
+        - Link 3-5 times throughout article (intro, middle, conclusion)
+        - Make links feel natural, not forced
+        
+        ---
+        
+        **CONTENT STRUCTURE** (Recommended Template - Adapt based on Research):
+        
+        ```markdown
+        **Meta Description**: [150-160 chars, benefit + primary keyword + call-to-action]
+        
+        # {page_title}
+        
+        [INTRO: Direct answer to search intent in 2-3 sentences. Include primary keyword. No fluff.]
+        
+        ## Quick Answer
+        [3-5 bullet points - direct answers for featured snippet targeting]
+        - [Key point 1]
+        - [Key point 2]
+        ...
+        
+        ## [H2 matching secondary keyword 1]
+        [Comprehensive content with Perplexity data. Cite sources [1], [2]. 
+        **INCLUDE INTERNAL LINK naturally here.**]
+        
+        ### [H3 diving deeper into subtopic]
+        [Content...]
+        
+        ## [H2 matching secondary keyword 2]
+        [Content with internal link to another relevant page]
+        
+        ## Frequently Asked Questions
+        
+        ### [Question 1 from keyword research]?
+        [Direct 40-50 word answer. This becomes FAQ schema.]
+        
+        ### [Question 2]?
+        [Direct answer...]
+        
+        ### [Question 3]?
+        [Direct answer...]
+        
+        ## Final Thoughts / Conclusion
+        [Summary + CTA + internal link to main product/pillar page]
+        
+        ## Sources
+        1. [Citation 1 with URL]
+        2. [Citation 2 with URL]
+        ...
+        ```
+        
+        ---
+        
+        **KEYWORD INTEGRATION**:
+        - Primary keyword: H1, first paragraph, 2-3 H2/H3 subheadings
+        - Secondary keywords: H2/H3 topics, naturally throughout
+        - Semantic variations: Use synonyms and related terms
+        - Keyword density: 1-2% (natural, not stuffed)
+        
+        **E-E-A-T SIGNALS** (Critical):
+        - Every claim cited with [number]
+        - Phrases: "According to [source], ..." / "Research shows [stat] [1]"
+        - Admit uncertainty: "While most experts agree... some debate exists about..."
+        - No absolute statements without sources
+        
+        **CONTENT QUALITY CHECKLIST** (Google's Self-Assessment):
+        ✓ Original information/analysis (not regurgitated)
+        ✓ Substantial, complete, comprehensive
+        ✓ Insightful beyond the obvious
+        ✓ Worth bookmarking or sharing
+        ✓ Magazine/encyclopedia quality
+        ✓ No spelling/grammar errors
+        ✓ Professional, not sloppy
+        
+        **WORD COUNT**: 1,800-2,500 words (comprehensive depth)
+        
+        **OUTPUT**: Full markdown article following structure above. Meta description at top. ALL internal links included.
+        """
+                    
+                    # SHARED EXECUTION FOR TOPIC & GENERIC PAGES
+                    try:
+                        print(f"DEBUG: Calling Gemini 2.5 Pro (New SDK) for {page_title}...", flush=True)
+                        # Use New SDK for consistency and access to 2.5 Pro
                         response = client_with_grounding.models.generate_content(
                             model="gemini-2.5-pro",
-                            contents=prompt,
-                            config=types.GenerateContentConfig(tools=[tool])
+                            contents=prompt
                         )
                         generated_text = response.text
                         
-                    elif page_type.lower() == 'category':
-                        # CATEGORY PROMPT (Research-Backed SEO Enhancement - Grounded + Respect Length)
-                        prompt = f"""You are an expert E-commerce Copywriter & SEO Specialist.
-
-**TASK**: Enhance this **CATEGORY/COLLECTION PAGE** using real-time search data.
-**CRITICAL GOAL**: infuse the content with high-value SEO keywords and competitive insights while respecting the original length and structure.
-
-**CONTEXT**:
-- Target Audience Location: {project_loc}
-- Target Language: {project_lang}
-
-**LOCALIZATION RULES (CRITICAL)**:
-1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India). Convert prices if needed.
-2. **Units**: Use the measurement system standard for **{project_loc}**.
-3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India).
-4. **Cultural Context**: Use examples relevant to **{project_loc}**.
-
-**PAGE DETAILS**:
-- URL: {page['url']}
-- Category Title: {page_title}
-
-**EXISTING CONTENT** (Source of Truth):
-```
-{existing_content[:5000]}
-```
-
-**INSTRUCTIONS**:
-1.  **Research First (USE GROUNDING)**:
-    -   Search for top-ranking competitors for "{page_title}" in **{project_loc}**.
-    -   Identify the **primary intent** (e.g., "buy cheap", "luxury", "guide") and align the copy.
-    -   Find 3-5 **semantic keywords** competitors are using that are missing here.
-
-2.  **Enhance & Optimize (The "Better" Part)**:
-    -   Rewrite the existing text to include these new keywords naturally.
-    -   Improve the value proposition based on what competitors offer.
-    -   Make it **better SEO-wise**: clearer headings, stronger hook, better keyword density.
-
-3.  **Respect Constraints**:
-    -   **Length**: Keep it roughly the same length (+/- 10%). Do NOT add massive new sections (like FAQs) unless the original had them.
-    -   **Structure**: Maintain the existing flow (Intro -> Products -> Outro).
-
-4.  **Meta Description**:
-    -   Write a new, high-CTR Meta Description (150-160 chars) based on your research.
-
-**OUTPUT FORMAT** (Markdown):
--   Return the full page content in Markdown.
--   Include a **Meta Description** at the top.
-"""
-                        # Use NEW SDK with Grounding for Categories too
-                        response = client_with_grounding.models.generate_content(
-                            model="gemini-2.5-pro",
-                            contents=prompt,
-                            config=types.GenerateContentConfig(tools=[tool])
-                        )
-                        generated_text = response.text
-                        
-                    elif page_type == 'Topic':
-                        # ... (Topic logic starts here, but we need to close the previous block first)
-                        pass
-
-                    # SHARED LOGIC FOR PRODUCT & CATEGORY (Clean & Save)
-                    if page_type.lower() in ['product', 'category']:
                         # Clean markdown
                         if generated_text.startswith('```markdown'): generated_text = generated_text[11:]
                         if generated_text.startswith('```'): generated_text = generated_text[3:]
@@ -3196,320 +3472,9 @@ def batch_update_pages():
                             "tech_audit_data": current_tech_data
                         }).eq('id', page_id).execute()
                         
-                        print(f"✓ Generated improved content for {page['url']}")
-                        continue # Skip the rest of the loop for Product/Category
-
-                except Exception as gen_error:
-                    print(f"✗ Error generating content for {page['url']}: {gen_error}")
-
-                # TOPIC LOGIC (MoFu/ToFu) - Now correctly placed outside the previous try/except
-                if page_type == 'Topic':
-                    print(f"DEBUG: Generating content for Topic: {page_title}", flush=True)
-                    # TOPIC PROMPT (MoFu/ToFu - COMPLETE Google 2024/2025 Compliance)
-                    # Get research data for this topic
-                    research_data = page.get('research_data', {})
-                    keyword_cluster = research_data.get('keyword_cluster', [])
-                    primary_keyword = research_data.get('primary_keyword', page_title)
-                    perplexity_research = research_data.get('perplexity_research', '')
-                    citations = research_data.get('citations', [])
-                    funnel_stage = page.get('funnel_stage', '')
-                    source_page_id = page.get('source_page_id')
-                    
-                    # Get source/related pages for internal linking
-                    internal_links = []
-                    
-                    if source_page_id:
-                        try:
-                            # 1. Fetch Parent (MoFu or Product)
-                            parent_res = supabase.table('pages').select('id, url, tech_audit_data, source_page_id').eq('id', source_page_id).single().execute()
-                            if parent_res.data:
-                                parent = parent_res.data
-                                parent_title = parent.get('tech_audit_data', {}).get('title', parent.get('url'))
-                                
-                                # Link to Parent
-                                if funnel_stage == 'MoFu':
-                                    internal_links.append(f"- {parent_title} (Main Product): {parent['url']}")
-                                elif funnel_stage == 'ToFu':
-                                    internal_links.append(f"- {parent_title} (In-Depth Guide): {parent['url']}")
-                                    
-                                    # 2. Fetch Grandparent (Product) for ToFu
-                                    grandparent_id = parent.get('source_page_id')
-                                    if grandparent_id:
-                                        gp_res = supabase.table('pages').select('url, tech_audit_data').eq('id', grandparent_id).single().execute()
-                                        if gp_res.data:
-                                            gp_title = gp_res.data.get('tech_audit_data', {}).get('title', gp_res.data.get('url'))
-                                            internal_links.append(f"- {gp_title} (Main Product): {gp_res.data['url']}")
-    
-                        except Exception as e:
-                            print(f"Error fetching internal links: {e}")
-                    
-                    print(f"DEBUG: Internal Links for {page_title}: {internal_links}")
-                    links_str = '\n'.join(internal_links) if internal_links else "No internal links available"
-                            
-                    # Format keywords for prompt
-                    if keyword_cluster:
-                        kw_list = '\n'.join([f"- {kw['keyword']} ({kw['volume']}/mo, Score: {kw.get('score', 0)})" for kw in keyword_cluster[:15]])
-                    else:
-                        kw_list = f"- {primary_keyword}"
-                    
-                    # Format citations
-                    citations_str = '\n'.join([f"[{i+1}] {cite}" for i, cite in enumerate(citations[:10])]) if citations else "No citations available"
-                    
-                    prompt = f"""You are an expert SEO Content Writer following **Google's Complete Search Documentation** (2024/2025):
-    - Google Search Essentials
-    - SEO Starter Guide  
-    - Creating Helpful, Reliable, People-First Content
-    - E-E-A-T Quality Rater Guidelines
-    
-    **ARTICLE TYPE**: {funnel_stage} Content
-    **TOPIC**: {page_title}
-
-**CONTEXT**:
-- Target Audience Location: {project_loc}
-- Target Language: {project_lang}
-
-**LOCALIZATION RULES (CRITICAL)**:
-1. **Currency**: You MUST use the local currency for **{project_loc}** (e.g., ₹ INR for India, £ GBP for UK, € EUR for Europe). Convert any research prices (like $) to the local currency using approximate current rates.
-2. **Units**: Use the measurement system standard for **{project_loc}** (e.g., Metric vs Imperial).
-3. **Spelling**: Use the correct spelling dialect (e.g., "Colour" for UK/India, "Color" for US).
-4. **Cultural Context**: Use examples and references relevant to **{project_loc}**.
-    
-    **TARGET KEYWORDS** (DataForSEO Validated):
-    {kw_list}
-    
-    **VERIFIED RESEARCH** (Perplexity with Citations):
-    {perplexity_research[:3000]}
-    
-    **REQUIRED INTERNAL LINKS** (Critical for SEO):
-    {links_str}
-    
-    **Sources to Cite**:
-    {citations_str}
-    
-    ---
-    
-    **GOOGLE'S MANDATORY REQUIREMENTS** (2024/2025):
-    
-    **1. E-E-A-T Framework (Quality Rater Guidelines)**:
-    - **Experience**: Demonstrate first-hand knowledge, testing, or real-world usage
-    - **Expertise**: Show subject matter authority with detailed, technical insights
-    - **Authoritativeness**: Cite authoritative sources (use Perplexity citations above)
-    - **Trustworthiness**: Fact-check all claims, cite sources, admit limitations/uncertainty
-    
-    **2. Helpful Content Principles (Post-March 2024 Core Update)**:
-    - Answer search intent DIRECTLY in first paragraph (no fluff intro)
-    - Provide ORIGINAL insights beyond obvious information
-    - Include SPECIFIC data/statistics with sources [numbered citations]
-    - Write for people, not search engines
-    - Demonstrate expertise through depth and nuance
-    - Avoid mass-produced, generic content patterns
-    
-    **3. SEO Starter Guide Essentials**:
-    - **Title**: Descriptive, unique, includes primary keyword (avoid clickbait)
-    - **Meta Description**: 150-160 chars, benefit-driven, actionable
-    - **Headings**: Clear H2/H3 hierarchy matching user questions
-    - **Internal Linking**: Link to ALL provided internal URLs naturally in content
-    - **Content Quality**: Substantial, complete, comprehensive (NOT thin or superficial)
-    - **Mobile-First**: Scannable structure (bullets, short paragraphs)
-    
-    **4. Featured Snippet Optimization**:
-    - Provide direct, concise answer in first 2-3 sentences
-    - Use "Quick Answer" section with 3-5 bullet points
-    - Structure content to answer "who, what, when, where, why, how"
-    
-    **5. Structured Data Readiness** (FAQ Schema):
-    - Include FAQ section with 3-5 common questions
-    - Format: ### Question / Direct answer (40-50 words)
-    - Questions should match "People Also Ask" intent
-    
-    **6. GEO (Generative Engine Optimization) Strategy**:
-       - **Definition Syntax**: Use clear "X is Y" sentences for core concepts (AI models quote these).
-       - **Data Tables**: AI LOVES structured data. If comparing items, YOU MUST USE A MARKDOWN TABLE.
-       - **Quotable Insights**: Include short, punchy statements that summarize complex ideas.
-       - **Direct Answers**: Ensure the "Quick Answer" section is self-contained and fact-heavy.
-    
-    **7. RESEARCH INTEGRATION (CRITICAL)**:
-       - The **VERIFIED RESEARCH** section above contains a detailed outline and key insights.
-       - **ADAPT THE STRUCTURE**: The structure below is a template. You MUST modify the H2/H3 headings to match the high-quality outline provided in the research if it offers better depth.
-       - **USE THE DATA**: Incorporate specific stats, facts, and examples from the research.
-    
-    """
-                    # Only add Review Standards for comparison/review topics
-                    if any(x in page_title.lower() for x in ['best', 'vs', 'review', 'comparison', 'top']):
-                        prompt += """
-    **7. High-Quality Review Standards** (MANDATORY for this topic):
-       - Include specific Pros/Cons lists
-       - Provide quantitative measurements/metrics where possible
-       - Explain *how* things were tested or evaluated
-       - Focus on unique features/drawbacks not found in manufacturer specs
-    """
-                    
-                    prompt += f"""
-    ---
-    
-    **INTERNAL LINKING STRATEGY** ({'MoFu → Product/Pillar' if funnel_stage == 'MoFu' else 'ToFu → MoFu + Product'}):
-    
-    **MANDATORY**: You MUST link to all provided internal links naturally within the content.
-    
-    **CRITICAL: MAIN PRODUCT LINKING**:
-    - You MUST link to the **MAIN PRODUCT** (if provided in the list) at least TWICE:
-      1. Once in the **first 30%** of the article (e.g., as a recommended solution/tool).
-      2. Once in the **Conclusion**.
-    - Do NOT be spammy. Make it helpful.
-    
-    **How to Link**:
-    - MoFu articles: Link to product/pillar pages in context (e.g., "If you're interested in [product name], check out our full review")
-    - ToFu articles: Link to MoFu articles AND product pages
-    - Use contextual anchor text (not "click here")
-    - Link 3-5 times throughout article (intro, middle, conclusion)
-    - Make links feel natural, not forced
-    
-    ---
-    
-    **CONTENT STRUCTURE** (Recommended Template - Adapt based on Research):
-    
-    ```markdown
-    **Meta Description**: [150-160 chars, benefit + primary keyword + call-to-action]
-    
-    # {page_title}
-    
-    [INTRO: Direct answer to search intent in 2-3 sentences. Include primary keyword. No fluff.]
-    
-    ## Quick Answer
-    [3-5 bullet points - direct answers for featured snippet targeting]
-    - [Key point 1]
-    - [Key point 2]
-    ...
-    
-    ## [H2 matching secondary keyword 1]
-    [Comprehensive content with Perplexity data. Cite sources [1], [2]. 
-    **INCLUDE INTERNAL LINK naturally here.**]
-    
-    ### [H3 diving deeper into subtopic]
-    [Content...]
-    
-    ## [H2 matching secondary keyword 2]
-    [Content with internal link to another relevant page]
-    
-    ## Frequently Asked Questions
-    
-    ### [Question 1 from keyword research]?
-    [Direct 40-50 word answer. This becomes FAQ schema.]
-    
-    ### [Question 2]?
-    [Direct answer...]
-    
-    ### [Question 3]?
-    [Direct answer...]
-    
-    ## Final Thoughts / Conclusion
-    [Summary + CTA + internal link to main product/pillar page]
-    
-    ## Sources
-    1. [Citation 1 with URL]
-    2. [Citation 2 with URL]
-    ...
-    ```
-    
-    ---
-    
-    **KEYWORD INTEGRATION**:
-    - Primary keyword: H1, first paragraph, 2-3 H2/H3 subheadings
-    - Secondary keywords: H2/H3 topics, naturally throughout
-    - Semantic variations: Use synonyms and related terms
-    - Keyword density: 1-2% (natural, not stuffed)
-    
-    **E-E-A-T SIGNALS** (Critical):
-    - Every claim cited with [number]
-    - Phrases: "According to [source], ..." / "Research shows [stat] [1]"
-    - Admit uncertainty: "While most experts agree... some debate exists about..."
-    - No absolute statements without sources
-    
-    **CONTENT QUALITY CHECKLIST** (Google's Self-Assessment):
-    ✓ Original information/analysis (not regurgitated)
-    ✓ Substantial, complete, comprehensive
-    ✓ Insightful beyond the obvious
-    ✓ Worth bookmarking or sharing
-    ✓ Magazine/encyclopedia quality
-    ✓ No spelling/grammar errors
-    ✓ Professional, not sloppy
-    
-    **WORD COUNT**: 1,800-2,500 words (comprehensive depth)
-    
-    **OUTPUT**: Full markdown article following structure above. Meta description at top. ALL internal links included.
-    """
-    
-                else:
-                    # GENERIC/SERVICE PROMPT (Educational & SEO Focused - Conservative)
-                    prompt = f"""You are an expert SEO Editor.
-    
-    **TASK**: Edit and optimize the existing content for this {page_type} page.
-    **CRITICAL GOAL**: Improve SEO and readability while maintaining the original structure and length.
-    
-    **PAGE DETAILS**:
-    - URL: {page['url']}
-    - Title: {page_title}
-    - Page Type: {page_type}
-    
-    **EXISTING CONTENT**:
-    ```
-    {existing_content[:5000]}
-    ```
-    
-    **INSTRUCTIONS**:
-    1.  **Preserve Structure**: Follow the original heading hierarchy and sectioning. Do not completely restructure the article unless it is unreadable.
-    2.  **Respect Length**: Keep the word count similar to the original. Do not add massive new sections unless a critical topic is missing.
-    3.  **SEO Polish**:
-        -   Ensure the primary keyword (from title) is naturally included.
-        -   Improve H2/H3 headings to be more descriptive.
-        -   Write a compelling **Meta Description** (150-160 chars).
-    4.  **Quality Check**:
-        -   Fix grammar and flow.
-        -   Use active voice.
-        -   Break long paragraphs into shorter ones (readability).
-    
-    **OUTPUT FORMAT** (Markdown):
-    -   Return the full page content in Markdown.
-    -   Include a **Meta Description** at the top.
-    """
-                
-                # SHARED EXECUTION FOR TOPIC & GENERIC PAGES
-                try:
-                    print(f"DEBUG: Calling Gemini 2.5 Pro (New SDK) for {page_title}...", flush=True)
-                    # Use New SDK for consistency and access to 2.5 Pro
-                    response = client_with_grounding.models.generate_content(
-                        model="gemini-2.5-pro",
-                        contents=prompt
-                    )
-                    generated_text = response.text
-                    
-                    # Clean markdown
-                    if generated_text.startswith('```markdown'): generated_text = generated_text[11:]
-                    if generated_text.startswith('```'): generated_text = generated_text[3:]
-                    if generated_text.endswith('```'): generated_text = generated_text[:-3]
-                    
-                    # Extract Meta Description
-                    meta_desc = None
-                    import re
-                    match = re.search(r'\*\*Meta Description\*\*:\s*(.*?)(?:\n|$)', generated_text)
-                    if match:
-                        meta_desc = match.group(1).strip()
-                    
-                    # Update tech_audit_data with new meta description
-                    current_tech_data = page.get('tech_audit_data') or {}
-                    if meta_desc:
-                        current_tech_data['meta_description'] = meta_desc
-                    
-                    # 4. Update DB
-                    supabase.table('pages').update({
-                        "content": generated_text.strip(),
-                        "product_action": "Idle", # Reset action
-                        "tech_audit_data": current_tech_data
-                    }).eq('id', page_id).execute()
-                    
-                    print(f"✓ Generated improved content for {page['url']}", flush=True)
-                except Exception as gen_error:
-                    print(f"✗ Error generating content for {page['url']}: {gen_error}", flush=True)
+                        print(f"✓ Generated improved content for {page['url']}", flush=True)
+                    except Exception as gen_error:
+                        print(f"✗ Error generating content for {page['url']}: {gen_error}", flush=True)
 
             # Start background thread
             thread = threading.Thread(target=process_content_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
