@@ -2300,9 +2300,9 @@
 
                 console.log(`Sending MoFu Action: ${apiAction} to ${API_BASE}/batch-update-pages`);
 
-                // 5 Minute Timeout for Research
+                // 10 Minute Timeout for Research/Content
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000);
+                const timeoutId = setTimeout(() => controller.abort(), 600000);
 
                 const res = await fetch(`${API_BASE}/batch-update-pages`, {
                     method: 'POST',
@@ -2473,9 +2473,9 @@
 
                 console.log(`Sending ToFu Action: ${apiAction} to ${API_BASE}/batch-update-pages`);
 
-                // 5 Minute Timeout for Research
+                // 10 Minute Timeout for Research/Content
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000);
+                const timeoutId = setTimeout(() => controller.abort(), 600000);
 
                 const res = await fetch(`${API_BASE}/batch-update-pages`, {
                     method: 'POST',
