@@ -890,22 +890,7 @@ def load_image_data(source):
                 return PIL.Image.open(source)
             raise Exception(f"Image not found at {source} or {local_path}")
 
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    print("Health check received")
-    db_status = "unknown"
-    try:
-        # Try a simple query
-        if supabase:
-            res = supabase.table('projects').select('id').limit(1).execute()
-            db_status = "connected"
-        else:
-            db_status = "not_configured"
-    except Exception as e:
-        print(f"DB Check failed: {e}")
-        db_status = f"error: {str(e)}"
-        
-    return jsonify({"status": "ok", "message": "Backend is running", "database": db_status})
+
 
 @app.route('/api/get-projects', methods=['GET'])
 def get_projects():
