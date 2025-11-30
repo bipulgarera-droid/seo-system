@@ -4,7 +4,7 @@ import time
 import traceback
 import json
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
 # Add parent directory to path to import gemini_client
@@ -24,7 +24,11 @@ load_dotenv('.env.local')
 # Remove static_folder config entirely to avoid any startup path issues
 # We are serving files manually in home() and dashboard()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-app = Flask(__name__)
+
+# Explicitly set template and static folders with absolute paths as requested
+template_dir = os.path.join(BASE_DIR, 'public')
+static_dir = os.path.join(BASE_DIR, 'public')
+app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 
 @app.route('/ping')
 def ping():
@@ -89,23 +93,17 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and
 @app.route('/')
 def home():
     try:
-        # Manually read the file to avoid static_folder/send_static_file issues
-        file_path = os.path.join(BASE_DIR, 'public', 'agency.html')
-        
-        if not os.path.exists(file_path):
-            print(f"Error: File not found at {file_path}", file=sys.stderr)
-            return f"Error: agency.html not found at {file_path}", 404
+        print("DEBUG: Entering home route", file=sys.stderr, flush=True)
+        public_dir = os.path.join(BASE_DIR, 'public')
+        if not os.path.exists(public_dir):
+            print(f"CRITICAL: public dir not found at {public_dir}", file=sys.stderr, flush=True)
+            return "Error: public directory not found", 404
             
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            
-        response = app.make_response(content)
-        response.headers['Content-Type'] = 'text/html'
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-        return response
+        return send_from_directory(public_dir, 'agency.html')
     except Exception as e:
-        print(f"Home route crash: {e}", file=sys.stderr)
-        return f"Server Error: {str(e)}", 500
+        print(f"CRITICAL ERROR: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        return f"Error loading home: {str(e)}", 500
 
 @app.route('/debug-files')
 def debug_files():
