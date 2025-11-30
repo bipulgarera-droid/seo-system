@@ -3009,7 +3009,7 @@ def batch_update_pages():
             tool = types.Tool(google_search=types.GoogleSearch())
             
             # Legacy model for Topic pages
-            model = genai.GenerativeModel('gemini-2.5-pro')
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
             for page_id in page_ids:
                 # 1. Get Page Data
@@ -3194,12 +3194,14 @@ def batch_update_pages():
                         }).eq('id', page_id).execute()
                         
                         print(f"✓ Generated improved content for {page['url']}")
+                        continue # Skip the rest of the loop for Product/Category
 
                 except Exception as gen_error:
                     print(f"✗ Error generating content for {page['url']}: {gen_error}")
 
                 # TOPIC LOGIC (MoFu/ToFu) - Now correctly placed outside the previous try/except
                 if page_type == 'Topic':
+                    print(f"DEBUG: Generating content for Topic: {page_title}")
                     # TOPIC PROMPT (MoFu/ToFu - COMPLETE Google 2024/2025 Compliance)
                     # Get research data for this topic
                     research_data = page.get('research_data', {})
@@ -3468,6 +3470,7 @@ def batch_update_pages():
     -   Include a **Meta Description** at the top.
     """
                 try:
+                    print(f"DEBUG: Calling Gemini 2.0 Flash Exp for {page_title}...")
                     response = model.generate_content(prompt)
                     generated_text = response.text
                     
