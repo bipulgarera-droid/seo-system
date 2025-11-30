@@ -92,8 +92,23 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and
 
 @app.route('/')
 def home():
-    print("DEBUG: Entering home route (Simple)", file=sys.stderr, flush=True)
-    return "Home is working - File I/O disabled for debugging", 200
+    try:
+        print("DEBUG: Entering home route", file=sys.stderr, flush=True)
+        
+        # Explicitly check for template existence
+        template_path = os.path.join(template_dir, 'index.html')
+        if not os.path.exists(template_path):
+            error_msg = f"CRITICAL: Template not found at {template_path}"
+            print(error_msg, file=sys.stderr, flush=True)
+            return jsonify({"error": "Template not found", "path": template_path}), 500
+            
+        print(f"DEBUG: Serving template from {template_path}", file=sys.stderr, flush=True)
+        return send_from_directory(template_dir, 'index.html')
+        
+    except Exception as e:
+        print(f"CRITICAL ERROR in home route: {str(e)}", file=sys.stderr, flush=True)
+        traceback.print_exc()
+        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
 
 @app.route('/health')
 def health_check():
