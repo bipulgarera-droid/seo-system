@@ -52,9 +52,15 @@ def get_debug_log():
         return jsonify({"logs": [f"Error reading log: {str(e)}"]}), 200
 
 import logging
-logging.basicConfig(filename='backend.log', level=logging.INFO, 
-                    format='%(asctime)s %(levelname)s: %(message)s')
-logger = logging.getLogger()
+try:
+    logging.basicConfig(filename='backend.log', level=logging.INFO, 
+                        format='%(asctime)s %(levelname)s: %(message)s')
+    logger = logging.getLogger()
+except Exception as e:
+    print(f"Warning: Failed to setup file logging: {e}", file=sys.stderr)
+    # Fallback to console logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger()
 
 # Configure Gemini
 # GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
