@@ -126,9 +126,7 @@ def dashboard():
     except Exception as e:
         return f"Server Error: {str(e)}", 500
 
-@app.route('/health')
-def health_check():
-    return "OK", 200
+
 
 @app.route('/api/test-ai', methods=['POST'])
 def test_ai():
