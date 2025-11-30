@@ -3076,9 +3076,18 @@ def batch_update_pages():
                     page_type = page.get('page_type', 'page')
 
                     # Fetch Project Settings for Localization
-                    project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
-                    project_loc = project_res.data.get('location', 'US') if project_res.data else 'US'
-                    project_lang = project_res.data.get('language', 'English') if project_res.data else 'English'
+                    project_loc = 'US'
+                    project_lang = 'English'
+                    try:
+                        log_debug(f"Fetching project settings for {page['project_id']}...")
+                        project_res = supabase.table('projects').select('location, language').eq('id', page['project_id']).single().execute()
+                        if project_res.data:
+                            project_loc = project_res.data.get('location', 'US')
+                            project_lang = project_res.data.get('language', 'English')
+                        log_debug(f"Project settings: Loc={project_loc}, Lang={project_lang}")
+                    except Exception as proj_err:
+                        log_debug(f"Error fetching project settings: {proj_err}")
+                        print(f"DEBUG: Project fetch failed: {proj_err}")
                     
                     try:
                         # BRANCHING LOGIC: Product vs Category vs Topic
