@@ -92,18 +92,13 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and
 
 @app.route('/')
 def home():
-    try:
-        print("DEBUG: Entering home route", file=sys.stderr, flush=True)
-        public_dir = os.path.join(BASE_DIR, 'public')
-        if not os.path.exists(public_dir):
-            print(f"CRITICAL: public dir not found at {public_dir}", file=sys.stderr, flush=True)
-            return "Error: public directory not found", 404
-            
-        return send_from_directory(public_dir, 'agency.html')
-    except Exception as e:
-        print(f"CRITICAL ERROR: {e}", file=sys.stderr, flush=True)
-        traceback.print_exc()
-        return f"Error loading home: {str(e)}", 500
+    print("DEBUG: Entering home route (Simple)", file=sys.stderr, flush=True)
+    return "Home is working - File I/O disabled for debugging", 200
+
+@app.route('/health')
+def health_check():
+    print("DEBUG: Health check hit", file=sys.stderr, flush=True)
+    return "OK", 200
 
 @app.route('/debug-files')
 def debug_files():
