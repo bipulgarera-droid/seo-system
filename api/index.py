@@ -3470,8 +3470,12 @@ def batch_update_pages():
     -   Include a **Meta Description** at the top.
     """
                 try:
-                    print(f"DEBUG: Calling Gemini 2.0 Flash Exp for {page_title}...")
-                    response = model.generate_content(prompt)
+                    print(f"DEBUG: Calling Gemini 2.5 Pro (New SDK) for {page_title}...")
+                    # Use New SDK for consistency and access to 2.5 Pro
+                    response = client_with_grounding.models.generate_content(
+                        model="gemini-2.5-pro",
+                        contents=prompt
+                    )
                     generated_text = response.text
                     
                     # Clean markdown
