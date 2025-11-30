@@ -47,7 +47,37 @@ def log_debug(message):
         print(f"Logging failed: {e}", file=sys.stderr)
 
 # Initialize log
+# Initialize log
 log_debug("Server started/reloaded")
+
+# --- AGGRESSIVE LOGGING START ---
+print(f"DEBUG: BASE_DIR is {BASE_DIR}", file=sys.stderr, flush=True)
+print(f"DEBUG: template_dir is {template_dir}", file=sys.stderr, flush=True)
+
+try:
+    if os.path.exists(template_dir):
+        print(f"DEBUG: Listing {template_dir}: {os.listdir(template_dir)}", file=sys.stderr, flush=True)
+    else:
+        print(f"DEBUG: template_dir does not exist!", file=sys.stderr, flush=True)
+except Exception as e:
+    print(f"DEBUG: Failed to list template_dir: {e}", file=sys.stderr, flush=True)
+
+@app.before_request
+def log_request_info():
+    print(f"DEBUG: Request started: {request.method} {request.url}", file=sys.stderr, flush=True)
+    # print(f"DEBUG: Headers: {request.headers}", file=sys.stderr, flush=True) # Uncomment if needed
+
+@app.after_request
+def log_response_info(response):
+    print(f"DEBUG: Request finished: {response.status}", file=sys.stderr, flush=True)
+    return response
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    print(f"CRITICAL: Unhandled Exception: {str(e)}", file=sys.stderr, flush=True)
+    traceback.print_exc()
+    return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+# --- AGGRESSIVE LOGGING END ---
 
 @app.route('/api/get-debug-log', methods=['GET'])
 def get_debug_log():
