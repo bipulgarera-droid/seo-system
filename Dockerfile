@@ -16,4 +16,4 @@ EXPOSE 3000
 
 # Command to run the application
 # Using gunicorn to serve the Flask app
-CMD ["gunicorn", "api.index:app", "--bind", "0.0.0.0:3000", "--timeout", "300"]
+CMD ["gunicorn", "api.index:app", "--bind", "0.0.0.0:3000", "--timeout", "600"]
