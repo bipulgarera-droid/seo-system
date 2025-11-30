@@ -78,11 +78,29 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and
 
 @app.route('/')
 def home():
-    response = app.make_response(app.send_static_file('agency.html'))
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+    try:
+        # Debug: Check if file exists
+        file_path = os.path.join(app.static_folder, 'agency.html')
+        if not os.path.exists(file_path):
+            return f"Error: agency.html not found at {file_path}", 404
+            
+        response = app.make_response(app.send_static_file('agency.html'))
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    except Exception as e:
+        print(f"Home route error: {e}", file=sys.stderr)
+        return f"Server Error: {str(e)}", 500
+
+@app.route('/debug-files')
+def debug_files():
+    try:
+        files = os.listdir(app.static_folder)
+        return jsonify({"static_folder": app.static_folder, "files": files})
+    except Exception as e:
+        return jsonify({"error": str(e), "static_folder": app.static_folder})
+
 
 @app.route('/dashboard')
 def dashboard():
