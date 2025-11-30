@@ -3476,11 +3476,14 @@ def batch_update_pages():
                     except Exception as gen_error:
                         print(f"✗ Error generating content for {page['url']}: {gen_error}", flush=True)
 
+            # Set status to Processing immediately
+            supabase.table('pages').update({"product_action": "Processing..."}).in_('id', page_ids).execute()
+
             # Start background thread
             thread = threading.Thread(target=process_content_generation, args=(page_ids, os.environ.get("GEMINI_API_KEY")))
             thread.start()
             
-            return jsonify({"message": "Content generation started in background. Please check back in a few minutes."})
+            return jsonify({"message": "Content generation started in background. The status will update to 'Processing...' in the table."})
         
             return jsonify({"message": "Content generated successfully"})
 
